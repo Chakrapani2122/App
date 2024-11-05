@@ -3,18 +3,42 @@ from tkinter import PhotoImage
 import requests
 import pandas
 from PIL import Image, ImageTk
+import re
+def validate_login():
+    email = email_entry.get()
+    password = password_entry.get()
+
+    # Email validation using regex
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_regex, email):
+        messagebox.showerror("Invalid Email", "Please enter a valid email address.")
+        return
+
+    # Password validation
+    if len(password) < 10:
+        messagebox.showerror("Invalid Password", "Password must be at least 10 characters long.")
+        return
+    if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password) or not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        messagebox.showerror("Invalid Password", "Password must contain letters, numbers, and special characters.")
+        return
+
+    # If validation passes
+    messagebox.showinfo("Login Successful", "You have logged in successfully!")
+
+
 # lets create a tkinter window with a title "Kansas State University"
 root = tkinter.Tk()
 root.title("Kansas State University")
-root.minsize(1200, 800)
+root.minsize(1000, 800)
 
 # Load the logo image using Pillow for the icon
-icon_image = Image.open("assets\logo.png")  # Update with the path to your logo file
-icon_image = icon_image.resize((100, 100), Image.LANCZOS)  # Resize to a suitable icon size
+icon_image = Image.open(r"assets\logo.png")  # Update with the path to your logo file
+icon_image = icon_image.resize((300, 150), Image.LANCZOS)  # Resize to a suitable icon size
 icon_image = ImageTk.PhotoImage(icon_image)
+root.iconphoto(False, icon_image)
 
 # Load the logo image using Pillow
-logo_image = Image.open("assets\logo.png")  # Update with the path to your logo file
+logo_image = Image.open(r"assets\logo.png")  # Update with the path to your logo file
 
 # Resize the logo image to custom dimensions (e.g., 150x150 pixels)
 logo_image = logo_image.resize((300, 150), Image.LANCZOS)  # Resize to desired dimensions
@@ -37,6 +61,22 @@ label.pack()
 label = tkinter.Label(root, text="Soil Micobial Agroecology Lab", font=("Helvetica", 18, "bold"))
 label.pack()
 
+
+# Create a label and entry for Email
+email_label = tkinter.Label(root, text="Email ID:", font=("Helvetica", 12))
+email_label.place(x=400, y=350)
+email_entry = tkinter.Entry(root, width=30)
+email_entry.place(x=500, y=350)
+
+# Create a label and entry for Password
+password_label = tkinter.Label(root, text="Password:", font=("Helvetica", 12))
+password_label.place(x=400, y=400)
+password_entry = tkinter.Entry(root, show="*", width=30)
+password_entry.place(x=500, y=400)
+
+# Create a login button
+login_button = tkinter.Button(root, text="Login", command=validate_login, bg='green', fg='white')
+login_button.place(x=525, y=450)
 root.mainloop()
 
 
