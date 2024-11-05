@@ -62,21 +62,20 @@ label = tkinter.Label(root, text="Soil Micobial Agroecology Lab", font=("Helveti
 label.pack()
 
 
-# Create a label and entry for Email
 email_label = tkinter.Label(root, text="Email ID:", font=("Helvetica", 12))
-email_label.place(x=400, y=350)
+email_label.place(relx=0.5, y=350, anchor='center')  # Center the email label
 email_entry = tkinter.Entry(root, width=30)
-email_entry.place(x=500, y=350)
+email_entry.place(relx=0.5, y=370, anchor='center')  # Center the email entry
 
 # Create a label and entry for Password
 password_label = tkinter.Label(root, text="Password:", font=("Helvetica", 12))
-password_label.place(x=400, y=400)
+password_label.place(relx=0.5, y=400, anchor='center')  # Center the password label
 password_entry = tkinter.Entry(root, show="*", width=30)
-password_entry.place(x=500, y=400)
+password_entry.place(relx=0.5, y=420, anchor='center')  # Center the password entry
 
 # Create a login button
-login_button = tkinter.Button(root, text="Login", command=validate_login, bg='green', fg='white')
-login_button.place(x=525, y=450)
+login_button = tkinter.Button(root, text="Login", command=validate_login)
+login_button.place(relx=0.5, y=450, anchor='center')
 root.mainloop()
 
 
