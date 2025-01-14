@@ -6,6 +6,8 @@ import re
 import xml.etree.ElementTree as ET
 from base64 import b64encode
 from PIL import Image, ImageTk
+from datetime import datetime
+import pytz
 
 # Load users from users.xml
 def load_users():
@@ -79,12 +81,21 @@ def show_user_page(username):
     folder_dropdown.config(font=("Helvetica", 12))
     folder_dropdown.pack(pady=10)
 
-    upload_button = tk.Button(root, text="Upload Files", font=("Helvetica", 12), bg="#4CAF50", fg="white", command=lambda: upload_files(folder_var.get()))
+    description_label = tk.Label(root, text="File Description:", font=("Helvetica", 12), bg="#f0f0f0")
+    description_label.pack(pady=10)
+    description_entry = tk.Text(root, font=("Helvetica", 12), bd=2, relief="groove", height=5, width=40)
+    description_entry.pack(pady=10)
+
+    upload_button = tk.Button(root, text="Upload Files", font=("Helvetica", 12), bg="#4CAF50", fg="white", command=lambda: upload_files(folder_var.get(), description_entry.get("1.0", tk.END).strip(), username))
     upload_button.pack(pady=20)
 
-def upload_files(selected_folder):
+def upload_files(selected_folder, description, username):
     files = filedialog.askopenfilenames()
     if not files:
+        return
+
+    if not description:
+        messagebox.showerror("Error", "File description is required.")
         return
 
     token = simpledialog.askstring("GitHub Token", "Please enter your GitHub personal access token:", show='*')
@@ -95,6 +106,10 @@ def upload_files(selected_folder):
     repo_owner = 'Chakrapani2122'
     repo_name = 'Data'
 
+    # Get current time in CST
+    cst = pytz.timezone('US/Central')
+    current_time = datetime.now(cst).strftime('%Y-%m-%d %H:%M:%S %Z')
+
     for file_path in files:
         with open(file_path, 'rb') as file:
             content = b64encode(file.read()).decode('utf-8')
@@ -102,8 +117,10 @@ def upload_files(selected_folder):
             file_path = f"{selected_folder}/{file_name}"
             api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
 
+            commit_message = f"Uploaded by {username} on {current_time}\n\n{description}"
+
             data = {
-                "message": f"Upload {file_name}",
+                "message": commit_message,
                 "content": content
             }
 
@@ -161,15 +178,15 @@ card_frame.pack(pady=20, padx=20, fill="both", expand=True)
 
 username_label = tk.Label(card_frame, text="Username:", font=("Helvetica", 12), bg="white")
 username_label.pack(pady=10)
-username_entry = tk.Entry(card_frame, font=("Helvetica", 12))
+username_entry = tk.Entry(card_frame, font=("Helvetica", 12), bd=2, relief="groove")
 username_entry.pack(pady=10)
 
 password_label = tk.Label(card_frame, text="Password:", font=("Helvetica", 12), bg="white")
 password_label.pack(pady=10)
-password_entry = tk.Entry(card_frame, show='*', font=("Helvetica", 12))
+password_entry = tk.Entry(card_frame, show='*', font=("Helvetica", 12), bd=2, relief="groove")
 password_entry.pack(pady=10)
 
-login_button = tk.Button(card_frame, text="Login", font=("Helvetica", 12), bg="#4CAF50", fg="white", command=validate_login)
+login_button = tk.Button(card_frame, text="Login", font=("Helvetica", 12), bg="#4CAF50", fg="white", bd=2, relief="groove", command=validate_login)
 login_button.pack(pady=20)
 
 root.mainloop()
