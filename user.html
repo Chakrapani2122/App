@@ -85,11 +85,14 @@
 
    <div class="file-upload">
        <select id="folderSelect">
-           <option value="Folder1">Folder 1</option>
-           <option value="Folder2">Folder 2</option>
-           <option value="Folder3">Folder 3</option>
-           <option value="Folder4">Folder 4</option>
-           <option value="Folder5">Folder 5</option>
+           <option value="Folder1">Forage</option>
+           <option value="Folder2">Soil Biology & Biochemistry</option>
+           <option value="Folder3">Soil Fertility</option>
+           <option value="Folder4">Soil Health</option>
+           <option value="Folder5">Soil Moisture</option>
+           <option value="Folder5">Soil Water Lab</option>
+           <option value="Folder5">Summer Crops</option>
+           <option value="Folder5">Winter Crops</option>
        </select>
        <input type="file" id="fileInput">
        <button onclick="uploadFile()">Upload</button>
@@ -122,6 +125,61 @@
            }
        }
    </script>
+   <script src="https://alcdn.msauth.net/browser/2.14.0/js/msal-browser.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/@microsoft/microsoft-graph-client/lib/graph-js-sdk-web.js"></script>
+   <script>
+    async function uploadFile() {
+        const token = prompt("Please enter your GitHub personal access token:");
+        if (!token) {
+            alert("GitHub personal access token is required.");
+            return;
+        }
 
+        const fileInput = document.getElementById('fileInput');
+        const folderSelect = document.getElementById('folderSelect');
+        const file = fileInput.files[0];
+        const selectedFolder = folderSelect.value;
+
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                const content = btoa(event.target.result); // Base64 encode the file content
+
+                const repoOwner = 'Chakrapani2122';
+                const repoName = 'Data';
+                const filePath = `${selectedFolder}/${file.name}`;
+                const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${filePath}`;
+
+                const data = {
+                    message: `Upload ${file.name}`,
+                    content: content
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (response.ok) {
+                        alert(`File ${file.name} uploaded successfully to GitHub repository!`);
+                    } else {
+                        const errorData = await response.json();
+                        alert(`There was an error uploading your file: ${errorData.message}`);
+                    }
+                } catch (error) {
+                    alert(`There was an error uploading your file: ${error.message}`);
+                }
+            };
+            reader.readAsBinaryString(file);
+        } else {
+            alert("Please select a file to upload.");
+        }
+    }
+</script>
 </body>
 </html>
