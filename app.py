@@ -1,81 +1,175 @@
-import tkinter
-from tkinter import PhotoImage
+import tkinter as tk
+from tkinter import messagebox, filedialog, simpledialog
+from tkinter import ttk
 import requests
-import pandas
-from PIL import Image, ImageTk
 import re
+import xml.etree.ElementTree as ET
+from base64 import b64encode
+from PIL import Image, ImageTk
+
+# Load users from users.xml
+def load_users():
+    tree = ET.parse('users.xml')
+    root = tree.getroot()
+    users = {}
+    for user in root.findall('user'):
+        username = user.find('username').text
+        first_name = user.find('first_name').text
+        last_name = user.find('last_name').text
+        password = user.find('password').text
+        role = user.find('role').text
+        university = user.find('university').text
+        users[username] = {
+            'password': password,
+            'first_name': first_name,
+            'last_name': last_name,
+            'role': role,
+            'university': university
+        }
+    return users
+
+users = load_users()
+
 def validate_login():
-    email = email_entry.get()
+    username = username_entry.get()
     password = password_entry.get()
 
-    # Email validation using regex
-    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_regex, email):
-        messagebox.showerror("Invalid Email", "Please enter a valid email address.")
-        return
-
-    # Password validation
-    if len(password) < 10:
-        messagebox.showerror("Invalid Password", "Password must be at least 10 characters long.")
-        return
-    if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password) or not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-        messagebox.showerror("Invalid Password", "Password must contain letters, numbers, and special characters.")
+    # Check if user exists in users.xml
+    if username not in users or users[username]['password'] != password:
+        messagebox.showerror("Invalid Login", "Invalid username or password.")
         return
 
     # If validation passes
-    messagebox.showinfo("Login Successful", "You have logged in successfully!")
+    messagebox.showinfo("Login Successful", f"Welcome {users[username]['first_name']} {users[username]['last_name']}!")
+    show_user_page(username)
 
+def show_user_page(username):
+    # Clear the login widgets
+    for widget in root.winfo_children():
+        widget.destroy()
 
-# lets create a tkinter window with a title "Kansas State University"
-root = tkinter.Tk()
-root.title("Kansas State University")
-root.minsize(1000, 800)
+    # Add image and text
+    image = Image.open("assets/logo.png")  # Replace with the path to your image
+    image = image.resize((200, 100), Image.LANCZOS)  # Resize the image to medium size
+    photo = ImageTk.PhotoImage(image)
 
-# Load the logo image using Pillow for the icon
-icon_image = Image.open(r"assets\logo.png")  # Update with the path to your logo file
-icon_image = icon_image.resize((300, 150), Image.LANCZOS)  # Resize to a suitable icon size
-icon_image = ImageTk.PhotoImage(icon_image)
-root.iconphoto(False, icon_image)
+    image_label = tk.Label(root, image=photo, bg="#f0f0f0")
+    image_label.image = photo  # Keep a reference to avoid garbage collection
+    image_label.pack(pady=(20, 5))
 
-# Load the logo image using Pillow
-logo_image = Image.open(r"assets\logo.png")  # Update with the path to your logo file
+    title_label = tk.Label(root, text="Kansas State University", font=("Helvetica", 16), fg="purple", bg="#f0f0f0")
+    title_label.pack(pady=(5, 20))
 
-# Resize the logo image to custom dimensions (e.g., 150x150 pixels)
-logo_image = logo_image.resize((300, 150), Image.LANCZOS)  # Resize to desired dimensions
-logo_image = ImageTk.PhotoImage(logo_image)
-# Create a label to display the logo
-logo_label = tkinter.Label(root, image=logo_image)
-logo_label.pack()
-# lets create a label with the text "Kansas State University"
-label = tkinter.Label(root, text="Kansas State University")
+    welcome_label = tk.Label(root, text=f"Welcome {users[username]['first_name']} {users[username]['last_name']}!", font=("Helvetica", 16), bg="#f0f0f0")
+    welcome_label.pack(pady=20)
 
-# lets create a button with the text "Get Data"
-button = tkinter.Button(root, text="Get Data")
+    role_label = tk.Label(root, text=f"Role: {users[username]['role']}", font=("Helvetica", 12), bg="#f0f0f0")
+    role_label.pack(pady=5)
 
-# lets create a text box to display the data
-text_box = tkinter.Text(root)
+    university_label = tk.Label(root, text=f"University: {users[username]['university']}", font=("Helvetica", 12), bg="#f0f0f0")
+    university_label.pack(pady=5)
 
-label = tkinter.Label(root, text="Kansas State University", font=("Helvetica", 24, "bold"), fg="purple")
-label.pack()
+    folder_label = tk.Label(root, text="Select a folder:", font=("Helvetica", 12), bg="#f0f0f0")
+    folder_label.pack(pady=10)
 
-label = tkinter.Label(root, text="Soil Micobial Agroecology Lab", font=("Helvetica", 18, "bold"))
-label.pack()
+    folder_var = tk.StringVar(root)
+    folder_var.set("Folder1")  # default value
 
+    folder_dropdown = tk.OptionMenu(root, folder_var, "Forage", "Soil Fertility", "Soil Moisture", "Soil health", "Summer Crops")
+    folder_dropdown.config(font=("Helvetica", 12))
+    folder_dropdown.pack(pady=10)
 
-email_label = tkinter.Label(root, text="Email ID:", font=("Helvetica", 12))
-email_label.place(relx=0.5, y=350, anchor='center')  # Center the email label
-email_entry = tkinter.Entry(root, width=30)
-email_entry.place(relx=0.5, y=370, anchor='center')  # Center the email entry
+    upload_button = tk.Button(root, text="Upload Files", font=("Helvetica", 12), bg="#4CAF50", fg="white", command=lambda: upload_files(folder_var.get()))
+    upload_button.pack(pady=20)
 
-# Create a label and entry for Password
-password_label = tkinter.Label(root, text="Password:", font=("Helvetica", 12))
-password_label.place(relx=0.5, y=400, anchor='center')  # Center the password label
-password_entry = tkinter.Entry(root, show="*", width=30)
-password_entry.place(relx=0.5, y=420, anchor='center')  # Center the password entry
+def upload_files(selected_folder):
+    files = filedialog.askopenfilenames()
+    if not files:
+        return
 
-# Create a login button
-login_button = tkinter.Button(root, text="Login", command=validate_login)
-login_button.place(relx=0.5, y=450, anchor='center')
+    token = simpledialog.askstring("GitHub Token", "Please enter your GitHub personal access token:", show='*')
+    if not token:
+        messagebox.showerror("Error", "GitHub personal access token is required.")
+        return
+
+    repo_owner = 'Chakrapani2122'
+    repo_name = 'Data'
+
+    for file_path in files:
+        with open(file_path, 'rb') as file:
+            content = b64encode(file.read()).decode('utf-8')
+            file_name = file_path.split('/')[-1]
+            file_path = f"{selected_folder}/{file_name}"
+            api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
+
+            data = {
+                "message": f"Upload {file_name}",
+                "content": content
+            }
+
+            try:
+                # Check if the file already exists
+                get_response = requests.get(api_url, headers={
+                    'Authorization': f'token {token}',
+                    'Content-Type': 'application/json'
+                })
+
+                if get_response.status_code == 200:
+                    file_data = get_response.json()
+                    data['sha'] = file_data['sha']  # Include the sha value if the file exists
+
+                response = requests.put(api_url, json=data, headers={
+                    'Authorization': f'token {token}',
+                    'Content-Type': 'application/json'
+                })
+
+                if response.status_code in [200, 201]:
+                    messagebox.showinfo("Success", f"File {file_name} uploaded successfully to GitHub repository in folder {selected_folder}!")
+                else:
+                    error_data = response.json()
+                    messagebox.showerror("Error", f"There was an error uploading your file: {error_data.get('message', 'Unknown error')}")
+            except Exception as e:
+                messagebox.showerror("Error", f"There was an error uploading your file: {str(e)}")
+
+root = tk.Tk()
+root.title("Login")
+
+# Adjust window size to display size
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+window_width = int(screen_width * 0.4)
+window_height = int(screen_height * 0.5)
+root.geometry(f"{window_width}x{window_height}+{int(screen_width * 0.3)}+{int(screen_height * 0.3)}")
+
+# Set background color
+root.configure(bg="#f0f0f0")
+
+# Add image and text
+image = Image.open("assets/logo.png")  # Replace with the path to your image
+image = image.resize((200, 100), Image.LANCZOS)  # Resize the image to medium size
+photo = ImageTk.PhotoImage(image)
+
+image_label = tk.Label(root, image=photo, bg="#f0f0f0")
+image_label.pack(pady=(20, 5))
+
+title_label = tk.Label(root, text="Kansas State University", font=("Helvetica", 16), fg="purple", bg="#f0f0f0")
+title_label.pack(pady=(5, 20))
+
+# Create login card
+card_frame = tk.Frame(root, bg="white", bd=2, relief="groove")
+card_frame.pack(pady=20, padx=20, fill="both", expand=True)
+
+username_label = tk.Label(card_frame, text="Username:", font=("Helvetica", 12), bg="white")
+username_label.pack(pady=10)
+username_entry = tk.Entry(card_frame, font=("Helvetica", 12))
+username_entry.pack(pady=10)
+
+password_label = tk.Label(card_frame, text="Password:", font=("Helvetica", 12), bg="white")
+password_label.pack(pady=10)
+password_entry = tk.Entry(card_frame, show='*', font=("Helvetica", 12))
+password_entry.pack(pady=10)
+
+login_button = tk.Button(card_frame, text="Login", font=("Helvetica", 12), bg="#4CAF50", fg="white", command=validate_login)
+login_button.pack(pady=20)
+
 root.mainloop()
-
-

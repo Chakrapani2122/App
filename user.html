@@ -85,14 +85,11 @@
 
    <div class="file-upload">
        <select id="folderSelect">
-           <option value="Folder1">Forage</option>
-           <option value="Folder2">Soil Biology & Biochemistry</option>
-           <option value="Folder3">Soil Fertility</option>
-           <option value="Folder4">Soil Health</option>
-           <option value="Folder5">Soil Moisture</option>
-           <option value="Folder5">Soil Water Lab</option>
-           <option value="Folder5">Summer Crops</option>
-           <option value="Folder5">Winter Crops</option>
+           <option value="Forage">Forage</option>
+           <option value="Soil Health">Soil Health</option>
+           <option value="Soil Fertility">Soil Fertility</option>
+           <option value="Summer Crops">Summer Crops</option>
+           <option value="Soil Water Lab">Soil Water Lab</option>
        </select>
        <input type="file" id="fileInput">
        <button onclick="uploadFile()">Upload</button>
@@ -106,7 +103,7 @@
            document.getElementById('userName').textContent = `Name: ${userDetails.firstName} ${userDetails.lastName}`;
            document.getElementById('userRole').textContent = `Role: ${userDetails.role}`;
        } else {
-           alert("No user details found. Please log in.");
+           alert("No user details found. Please log in again with valid credentials.");
            window.location.href = 'index.html'; // Redirect to login page if no user details
        }
 
@@ -125,8 +122,7 @@
            }
        }
    </script>
-   <script src="https://alcdn.msauth.net/browser/2.14.0/js/msal-browser.min.js"></script>
-   <script src="https://cdn.jsdelivr.net/npm/@microsoft/microsoft-graph-client/lib/graph-js-sdk-web.js"></script>
+
    <script>
     async function uploadFile() {
         const token = prompt("Please enter your GitHub personal access token:");
@@ -156,6 +152,20 @@
                 };
 
                 try {
+                    // Check if the file already exists
+                    const getResponse = await fetch(apiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (getResponse.ok) {
+                        const fileData = await getResponse.json();
+                        data.sha = fileData.sha; // Include the sha value if the file exists
+                    }
+
                     const response = await fetch(apiUrl, {
                         method: 'PUT',
                         headers: {
@@ -166,7 +176,7 @@
                     });
 
                     if (response.ok) {
-                        alert(`File ${file.name} uploaded successfully to GitHub repository!`);
+                        alert(`File ${file.name} uploaded successfully to GitHub repository in folder ${selectedFolder}!`);
                     } else {
                         const errorData = await response.json();
                         alert(`There was an error uploading your file: ${errorData.message}`);
