@@ -12,6 +12,7 @@ except ImportError:
 # GitHub repository details
 GITHUB_REPO = "Chakrapani2122/Data"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/"
+GITHUB_COMMITS_URL = f"https://api.github.com/repos/{GITHUB_REPO}/commits"
 
 def upload_to_github(file, path, token):
     url = GITHUB_API_URL + path
@@ -36,6 +37,16 @@ def upload_to_github(file, path, token):
     }
     response = requests.put(url, json=data, headers=headers)
     return response.status_code, response.json()
+
+def get_commit_history(token):
+    headers = {
+        "Authorization": f"token {token}"
+    }
+    response = requests.get(GITHUB_COMMITS_URL, headers=headers)
+    if response.status_code == 200:
+        return response.json()[:5]  # Get the last 5 commits
+    else:
+        return []
 
 def show_upload_page():
     st.title("Upload Files to GitHub")
@@ -72,6 +83,11 @@ def show_upload_page():
                         status_code, response = upload_to_github(uploaded_file, file_name, github_token)
                         if status_code == 201:
                             st.success(f"File '{file_name}' uploaded successfully!")
+                            commits = get_commit_history(github_token)
+                            if commits:
+                                st.subheader("Last 5 Commits")
+                                for commit in commits:
+                                    st.write(f"- {commit['commit']['message']} by {commit['commit']['author']['name']} on {commit['commit']['author']['date']}")
                             st.experimental_rerun()  # Clear the selected files and token input area
                         elif status_code == 409:
                             st.warning(f"File '{file_name}' already exists.")

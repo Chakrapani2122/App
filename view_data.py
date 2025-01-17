@@ -1,66 +1,68 @@
 import streamlit as st
 import requests
+import pandas as pd
 
-def get_onedrive_files(folder_link):
-    # Extract the folder ID from the OneDrive link
-    folder_id = folder_link.split('/')[-1]
-    api_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{folder_id}/children"
+# GitHub repository details
+GITHUB_REPO = "Chakrapani2122/Data"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/"
+
+def get_github_files(path="", token=""):
+    url = GITHUB_API_URL + path
     headers = {
-        "Authorization": f"Bearer {st.secrets['onedrive_token']}"
+        "Authorization": f"token {token}"
     }
-    response = requests.get(api_url, headers=headers)
+    response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        return response.json().get('value', [])
+        return response.json()
+    elif response.status_code == 401:
+        st.error("Unauthorized access. Please check your GitHub token.")
+        return []
+    elif response.status_code == 404:
+        st.error("Repository or path not found. Please check the folder path.")
+        return []
     else:
-        st.error("Failed to fetch files from OneDrive.")
+        st.error(f"Failed to fetch files from GitHub. Status code: {response.status_code}")
         return []
 
 def show_view_data_page():
     st.title("View Data")
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.subheader("Ashland")
-        ashland_options = ["Forage", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Summer Crops", "Winter Crops", "Soil Water Lab"]
-        ashland_selection = st.selectbox("Select a category", [""] + ashland_options, key="ashland")
-
-    with col2:
-        st.subheader("El Reno")
-        el_reno_options = ["Archive", "Cronos Data", "Field data"]
-        el_reno_selection = st.selectbox("Select a category", [""] + el_reno_options, key="el_reno")
-
-    with col3:
-        st.subheader("Perkins")
-        perkins_options = ["Plant Height - Soil Moisture"]
-        perkins_selection = st.selectbox("Select a category", [""] + perkins_options, key="perkins")
-
-    st.write("---")
-
-    if ashland_selection and not el_reno_selection and not perkins_selection:
-        category = ashland_selection
-    elif el_reno_selection and not ashland_selection and not perkins_selection:
-        category = el_reno_selection
-    elif perkins_selection and not ashland_selection and not el_reno_selection:
-        category = perkins_selection
-    else:
-        st.warning("Please select a category from only one dropdown.")
+    github_token = st.text_input("Enter your GitHub token", type="password")
+    if not github_token:
+        st.warning("GitHub token is required to access the repository.")
         return
 
-    folder_link = st.text_input("Enter OneDrive folder link")
-    if folder_link:
-        files = get_onedrive_files(folder_link)
-        if files:
-            subdirectories = [file['name'] for file in files if file['folder']]
+    folder_path = ""
+    files = get_github_files(folder_path, github_token)
+    if files:
+        subdirectories = [file['name'] for file in files if file['type'] == 'dir']
+        if subdirectories:
             selected_subdirectory = st.selectbox("Select a subdirectory", subdirectories)
             if selected_subdirectory:
-                subdirectory_files = get_onedrive_files(f"{folder_link}/{selected_subdirectory}")
-                file_names = [file['name'] for file in subdirectory_files if not file['folder']]
-                selected_file = st.selectbox("Select a file", file_names)
-                if selected_file:
-                    file_content = next(file['@microsoft.graph.downloadUrl'] for file in subdirectory_files if file['name'] == selected_file)
-                    response = requests.get(file_content)
-                    if response.status_code == 200:
-                        st.text_area("File Content", response.text, height=300, max_chars=None, key=None)
-                    else:
-                        st.error("Failed to fetch file content.")
+                subdirectory_files = get_github_files(f"{folder_path}/{selected_subdirectory}", github_token)
+                file_names = [file['name'] for file in subdirectory_files if file['type'] == 'file']
+                if file_names:
+                    selected_file = st.selectbox("Select a file", file_names)
+                    if selected_file:
+                        file_url = next(file['download_url'] for file in subdirectory_files if file['name'] == selected_file)
+                        response = requests.get(file_url)
+                        if response.status_code == 200:
+                            if selected_file.endswith(".xlsx"):
+                                xls = pd.ExcelFile(response.content)
+                                sheet_name = st.selectbox("Select a sheet", xls.sheet_names)
+                                df = pd.read_excel(xls, sheet_name=sheet_name)
+                                st.dataframe(df)
+                            elif selected_file.endswith(".csv"):
+                                df = pd.read_csv(response.content)
+                                st.dataframe(df)
+                            elif selected_file.endswith(".txt") or selected_file.endswith(".dat"):
+                                file_content = response.text
+                                st.text_area("File Content", file_content, height=300, max_chars=None, key=None)
+                            else:
+                                st.warning(f"Cannot display content of {selected_file} (unsupported file type).")
+                        else:
+                            st.error("Failed to fetch file content.")
+                else:
+                    st.warning("No files found in the selected subdirectory.")
+        else:
+            st.warning("No subdirectories found in the repository.")
