@@ -1,6 +1,9 @@
 import streamlit as st
 from contact import show_contact_page
 from upload import show_upload_page
+from view_data import show_view_data_page
+from visualizations import show_visualizations_page
+from custom_visualizations import show_custom_visualizations_page
 
 # Set the page configuration
 st.set_page_config(page_title="Kansas State University - SMAL Project", page_icon="assets/logo.png", layout="wide")
@@ -11,7 +14,7 @@ logo_url = "assets/logo.png"
 # Create a sidebar for navigation
 st.sidebar.image(logo_url, width=50)
 st.sidebar.title("SMAL Project")
-page = st.sidebar.radio("Navigation", ["Home", "Upload", "Contact"], label_visibility="collapsed")
+page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Visualizations", "Custom Visualizations", "Contact"], label_visibility="collapsed")
 
 # Define the home page content
 if page == "Home":
@@ -61,6 +64,18 @@ if page == "Home":
 # Define the upload page content
 elif page == "Upload":
     show_upload_page()
+
+# Define the view data page content
+elif page == "View Data":
+    show_view_data_page()
+
+# Define the visualizations page content
+elif page == "Visualizations":
+    show_visualizations_page()
+
+# Define the custom visualizations page content
+elif page == "Custom Visualizations":
+    show_custom_visualizations_page()
 
 # Define the contact page content
 elif page == "Contact":
