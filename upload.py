@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import base64
 import pandas as pd
+from PIL import Image
 
 # Ensure openpyxl is installed for reading .xlsx files
 try:
@@ -36,6 +37,7 @@ def upload_to_github(file, path, token):
         "content": content
     }
     response = requests.put(url, json=data, headers=headers)
+    st.write(f"Upload response status code: {response.status_code}")  # Log the status code
     return response.status_code, response.json()
 
 def get_commit_history(token):
@@ -50,7 +52,19 @@ def get_commit_history(token):
 
 def show_upload_page():
     st.title("Upload Files to GitHub")
-    uploaded_files = st.file_uploader("Choose files", type=["xlsx", "csv", "txt", "dat"], accept_multiple_files=True)
+    
+    github_token = st.text_input("Enter your GitHub token", type="password")
+    if github_token:
+        commits = get_commit_history(github_token)
+        if commits:
+            st.subheader("Last 5 Commits")
+            for commit in commits:
+                st.write(f"- {commit['commit']['author']['date']}: {commit['commit']['author']['name']}: {commit['commit']['message']}")
+        else:
+            st.warning("Failed to retrieve commit history. Please check your GitHub token.")
+    
+    uploaded_files = st.file_uploader("Choose files", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
+    
     if uploaded_files:
         uploaded_file_names = [uploaded_file.name for uploaded_file in uploaded_files]
         if len(uploaded_file_names) != len(set(uploaded_file_names)):
@@ -62,7 +76,9 @@ def show_upload_page():
                     file_name = uploaded_file.name
                     try:
                         if file_name.endswith(".xlsx"):
-                            df = pd.read_excel(uploaded_file, engine='openpyxl')
+                            xls = pd.ExcelFile(uploaded_file)
+                            sheet_name = st.selectbox("Select a sheet", xls.sheet_names)
+                            df = pd.read_excel(xls, sheet_name=sheet_name)
                             st.dataframe(df)
                         elif file_name.endswith(".csv"):
                             df = pd.read_csv(uploaded_file)
@@ -70,31 +86,34 @@ def show_upload_page():
                         elif file_name.endswith(".txt") or file_name.endswith(".dat"):
                             file_content = uploaded_file.getvalue().decode("utf-8")
                             st.text_area(file_name, file_content, height=300, max_chars=None, key=None)
+                        elif file_name.endswith(".jpg") or file_name.endswith(".png"):
+                            image = Image.open(uploaded_file)
+                            st.image(image, caption=file_name)
                         else:
                             st.warning(f"Cannot display content of {file_name} (unsupported file type).")
                     except Exception as e:
                         st.warning(f"Cannot display content of {file_name} (error: {e}).")
             
-            github_token = st.text_input("Enter your GitHub token", type="password")
+            upload_status = st.empty()  # Placeholder for upload status message
+            file_statuses = []  # List to hold the status of each file
+            
             if st.button("Upload"):
                 if github_token:
                     for uploaded_file in uploaded_files:
                         file_name = uploaded_file.name
                         status_code, response = upload_to_github(uploaded_file, file_name, github_token)
                         if status_code == 201:
-                            st.success(f"File '{file_name}' uploaded successfully!")
-                            commits = get_commit_history(github_token)
-                            if commits:
-                                st.subheader("Last 5 Commits")
-                                for commit in commits:
-                                    st.write(f"- {commit['commit']['message']} by {commit['commit']['author']['name']} on {commit['commit']['author']['date']}")
-                            st.experimental_rerun()  # Clear the selected files and token input area
+                            file_statuses.append(f"File '{file_name}' uploaded successfully!")
                         elif status_code == 409:
-                            st.warning(f"File '{file_name}' already exists.")
+                            file_statuses.append(f"File '{file_name}' already exists at path: {file_name}")
                         else:
-                            st.error(f"Failed to upload file '{file_name}'. Error: {response}")
+                            file_statuses.append(f"Failed to upload file '{file_name}'. Error: {response}")
+                    
+                    # Display the status of each file
+                    for status in file_statuses:
+                        upload_status.write(status)
                 else:
-                    st.error("GitHub token is required to upload files.")
+                    upload_status.error("GitHub token is required to upload files.")
 
 if __name__ == "__main__":
     show_upload_page()
