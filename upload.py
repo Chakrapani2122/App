@@ -53,7 +53,7 @@ def get_commit_history(token):
 def show_upload_page():
     st.title("Upload Files to GitHub")
     
-    github_token = st.text_input("Enter your GitHub token", type="password")
+    github_token = st.text_input("**Enter your GitHub token**", type="password")
     if github_token:
         commits = get_commit_history(github_token)
         if commits:
@@ -63,21 +63,21 @@ def show_upload_page():
         else:
             st.warning("Failed to retrieve commit history. Please check your GitHub token.")
     
-    uploaded_files = st.file_uploader("Choose files", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("**Choose files**", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
     
     if uploaded_files:
         uploaded_file_names = [uploaded_file.name for uploaded_file in uploaded_files]
         if len(uploaded_file_names) != len(set(uploaded_file_names)):
             st.warning("Duplicate files detected. Please remove duplicate files before uploading.")
         else:
-            selected_file = st.selectbox("Select a file to view", uploaded_file_names)
+            selected_file = st.selectbox("**Select a file to view**", uploaded_file_names)
             for uploaded_file in uploaded_files:
                 if uploaded_file.name == selected_file:
                     file_name = uploaded_file.name
                     try:
                         if file_name.endswith(".xlsx"):
                             xls = pd.ExcelFile(uploaded_file)
-                            sheet_name = st.selectbox("Select a sheet", xls.sheet_names)
+                            sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
                             df = pd.read_excel(xls, sheet_name=sheet_name)
                             st.dataframe(df)
                         elif file_name.endswith(".csv"):

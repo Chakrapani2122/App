@@ -29,7 +29,7 @@ def get_github_files(path="", token=""):
 def show_view_data_page():
     st.title("View Data")
 
-    github_token = st.text_input("Enter your GitHub token", type="password")
+    github_token = st.text_input("**Enter your GitHub token**", type="password")
     if not github_token:
         st.warning("GitHub token is required to access the repository.")
         return
@@ -40,58 +40,64 @@ def show_view_data_page():
         subdirectories = [file['name'] for file in files if file['type'] == 'dir']
         root_files = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
         
-        selected_subdirectory = st.selectbox("Select a subdirectory", ["Root Directory"] + subdirectories)
-        if selected_subdirectory == "Root Directory":
-            file_names = root_files
-        else:
-            subdirectory_files = get_github_files(f"{folder_path}/{selected_subdirectory}", github_token)
-            file_names = [file['name'] for file in subdirectory_files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
+        col1, col2 = st.columns(2)
         
-        if file_names:
-            selected_file = st.selectbox("Select a file", file_names)
-            if selected_file:
-                if selected_subdirectory == "Root Directory":
-                    file_url = next(file['download_url'] for file in files if file['name'] == selected_file)
-                else:
-                    file_url = next(file['download_url'] for file in subdirectory_files if file['name'] == selected_file)
-                
-                response = requests.get(file_url)
-                if response.status_code == 200:
-                    try:
-                        if selected_file.endswith(".xlsx"):
-                            try:
-                                xls = pd.ExcelFile(BytesIO(response.content))
-                                sheet_name = st.selectbox("Select a sheet", xls.sheet_names)
-                                df = pd.read_excel(BytesIO(response.content), sheet_name=sheet_name)
-                                st.dataframe(df)
-                            except Exception as e:
-                                st.error(f"Error reading the .xlsx file: {e}")
-                                try:
-                                    st.text_area("File Content", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
-                                except UnicodeDecodeError:
-                                    st.text_area("File Content", response.content.decode("latin1"), height=300, max_chars=None, key=None, disabled=True)
-                        elif selected_file.endswith(".csv"):
-                            df = pd.read_csv(BytesIO(response.content))
-                            st.dataframe(df)
-                        elif selected_file.endswith((".txt", ".dat", ".md")):
-                            try:
-                                file_content = response.content.decode("utf-8")
-                            except UnicodeDecodeError:
-                                file_content = response.content.decode("latin1")
-                            st.text_area("File Content", file_content, height=300, max_chars=None, key=None, disabled=True)
-                        elif selected_file.endswith((".jpg", ".jpeg", ".png", ".heic")):
-                            image = Image.open(BytesIO(response.content))
-                            st.image(image, caption=selected_file)
-                        else:
-                            st.text_area("File Content", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
-                    except Exception as e:
-                        st.error(f"Error reading the file: {e}")
+        with col1:
+            st.write("**Select a Folder**")
+            selected_subdirectory = st.selectbox("", ["Root Directory"] + subdirectories)
+        
+        with col2:
+            st.write("**Select a file**")
+            if selected_subdirectory == "Root Directory":
+                file_names = root_files
+            else:
+                subdirectory_files = get_github_files(f"{folder_path}/{selected_subdirectory}", github_token)
+                file_names = [file['name'] for file in subdirectory_files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
+            selected_file = st.selectbox("", file_names)
+        
+        if selected_file:
+            if selected_subdirectory == "Root Directory":
+                file_url = next(file['download_url'] for file in files if file['name'] == selected_file)
+            else:
+                file_url = next(file['download_url'] for file in subdirectory_files if file['name'] == selected_file)
+            
+            response = requests.get(file_url)
+            if response.status_code == 200:
+                try:
+                    if selected_file.endswith(".xlsx"):
                         try:
-                            st.text_area("File Content", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
+                            xls = pd.ExcelFile(BytesIO(response.content))
+                            sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
+                            df = pd.read_excel(BytesIO(response.content), sheet_name=sheet_name)
+                            st.dataframe(df)
+                        except Exception as e:
+                            st.error(f"Error reading the .xlsx file: {e}")
+                            try:
+                                st.text_area("**File Content**", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
+                            except UnicodeDecodeError:
+                                st.text_area("**File Content**", response.content.decode("latin1"), height=300, max_chars=None, key=None, disabled=True)
+                    elif selected_file.endswith(".csv"):
+                        df = pd.read_csv(BytesIO(response.content))
+                        st.dataframe(df)
+                    elif selected_file.endswith((".txt", ".dat", ".md")):
+                        try:
+                            file_content = response.content.decode("utf-8")
                         except UnicodeDecodeError:
-                            st.text_area("File Content", response.content.decode("latin1"), height=300, max_chars=None, key=None, disabled=True)
-                else:
-                    st.error("Failed to fetch file content.")
+                            file_content = response.content.decode("latin1")
+                        st.text_area("**File Content**", file_content, height=300, max_chars=None, key=None, disabled=True)
+                    elif selected_file.endswith((".jpg", ".jpeg", ".png", ".heic")):
+                        image = Image.open(BytesIO(response.content))
+                        st.image(image, caption=selected_file)
+                    else:
+                        st.text_area("**File Content**", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
+                except Exception as e:
+                    st.error(f"Error reading the file: {e}")
+                    try:
+                        st.text_area("**File Content**", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
+                    except UnicodeDecodeError:
+                        st.text_area("**File Content**", response.content.decode("latin1"), height=300, max_chars=None, key=None, disabled=True)
+            else:
+                st.error("Failed to fetch file content.")
         else:
             st.warning("No files found in the selected directory.")
 

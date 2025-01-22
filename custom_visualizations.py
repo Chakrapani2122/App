@@ -48,35 +48,54 @@ def validate_xml(xml_content):
 
 def show_custom_visualizations_page():
     st.title("Custom Visualizations")
-    st.write("Upload a CSV or Excel file to visualize the data using Matplotlib and Seaborn.")
+    st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
 
-    uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("**Choose a CSV or Excel file**", type=["csv", "xlsx"])
     
     if uploaded_file is not None:
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         elif uploaded_file.name.endswith(".xlsx"):
             xls = pd.ExcelFile(uploaded_file)
-            sheet_name = st.selectbox("Select a sheet", xls.sheet_names)
+            sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
             df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
         
-        st.write("Data Preview:")
-        st.dataframe(df.head())
+        st.write("**Data Preview: First 100 Observations**")
+        st.dataframe(df.head(100))
+        st.write("---")
+
+        # Display data types of each column
+        st.markdown("**Data Types:**")
+        col1, col2, col3, col4 = st.columns(4)
+        for i, (col, dtype) in enumerate(df.dtypes.items()):
+            if i % 4 == 0:
+                with col1:
+                    st.write(f"{col}: {dtype}")
+            elif i % 4 == 1:
+                with col2:
+                    st.write(f"{col}: {dtype}")
+            elif i % 4 == 2:
+                with col3:
+                    st.write(f"{col}: {dtype}")
+            else:
+                with col4:
+                    st.write(f"{col}: {dtype}")
+        st.write("---")
 
         columns = df.columns.tolist()
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.write("X-axis columns")
+            st.write("**X-axis columns**")
             x_axis = st.multiselect("Select X-axis columns", columns, key="x_axis")
         
         with col2:
-            st.write("Y-axis columns")
+            st.write("**Y-axis columns**")
             y_axis = st.multiselect("Select Y-axis columns", columns, key="y_axis")
         
         with col3:
-            st.write("Plot type")
+            st.write("**Plot type**")
             plot_type = st.selectbox("Select Plot Type", ["Scatter Plot", "Line Plot", "Bar Plot", "Histogram", "Box Plot", "Violin Plot"], key="plot_type")
 
         if st.button("Generate Plot"):
@@ -117,8 +136,8 @@ def show_custom_visualizations_page():
         if 'plot_image' in st.session_state:
             st.image(st.session_state['plot_image'].getvalue(), caption="Generated Plot")
 
-            plot_name = st.text_input("Enter the name for the visualization")
-            plot_description = st.text_area("Enter the description for the visualization")
+            plot_name = st.text_input("**Enter the name for the visualization**")
+            plot_description = st.text_area("**Enter the description for the visualization**")
             
             if plot_name and plot_description:
                 # Save description in XML
@@ -126,7 +145,7 @@ def show_custom_visualizations_page():
                 ET.SubElement(visualization, "Name").text = plot_name
                 ET.SubElement(visualization, "Description").text = plot_description
                 
-                github_token = st.text_input("Enter your GitHub token", type="password")
+                github_token = st.text_input("**Enter your GitHub token**", type="password")
                 if github_token:
                     if st.button("Save"):
                         # Upload image
