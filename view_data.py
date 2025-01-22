@@ -38,14 +38,14 @@ def show_view_data_page():
     files = get_github_files(folder_path, github_token)
     if files:
         subdirectories = [file['name'] for file in files if file['type'] == 'dir']
-        root_files = [file['name'] for file in files if file['type'] == 'file']
+        root_files = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
         
         selected_subdirectory = st.selectbox("Select a subdirectory", ["Root Directory"] + subdirectories)
         if selected_subdirectory == "Root Directory":
             file_names = root_files
         else:
             subdirectory_files = get_github_files(f"{folder_path}/{selected_subdirectory}", github_token)
-            file_names = [file['name'] for file in subdirectory_files if file['type'] == 'file']
+            file_names = [file['name'] for file in subdirectory_files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
         
         if file_names:
             selected_file = st.selectbox("Select a file", file_names)
@@ -73,13 +73,13 @@ def show_view_data_page():
                         elif selected_file.endswith(".csv"):
                             df = pd.read_csv(BytesIO(response.content))
                             st.dataframe(df)
-                        elif selected_file.endswith(".txt") or selected_file.endswith(".dat") or selected_file.endswith(".md"):
+                        elif selected_file.endswith((".txt", ".dat", ".md")):
                             try:
                                 file_content = response.content.decode("utf-8")
                             except UnicodeDecodeError:
                                 file_content = response.content.decode("latin1")
                             st.text_area("File Content", file_content, height=300, max_chars=None, key=None, disabled=True)
-                        elif selected_file.endswith(".jpg") or selected_file.endswith(".png"):
+                        elif selected_file.endswith((".jpg", ".jpeg", ".png", ".heic")):
                             image = Image.open(BytesIO(response.content))
                             st.image(image, caption=selected_file)
                         else:
@@ -94,3 +94,6 @@ def show_view_data_page():
                     st.error("Failed to fetch file content.")
         else:
             st.warning("No files found in the selected directory.")
+
+if __name__ == "__main__":
+    show_view_data_page()
