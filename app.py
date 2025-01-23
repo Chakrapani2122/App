@@ -18,7 +18,7 @@ page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Visualiza
 
 # Define the home page content
 if page == "Home":
-    col1, col2 = st.columns([1, 10])
+    col1, col2 = st.columns([1, 5])
     with col1:
         st.image(logo_url, width=100)
     with col2:
