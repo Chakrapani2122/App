@@ -5,8 +5,9 @@ openpyxl==3.0.9
 matplotlib==3.4.3
 seaborn==0.11.2
 Pillow==8.3.2
-numpy==1.21.2
+numpy==1.19.3
 setuptools>=58.0.0
 scipy==1.7.1
 scikit-learn==0.24.2
+distutils
 # Add other libraries and their versions here
