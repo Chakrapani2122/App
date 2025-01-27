@@ -1,8 +1,8 @@
 import streamlit as st
 import requests
 import pandas as pd
-from io import BytesIO
 from PIL import Image
+from openpyxl import load_workbook
 
 # GitHub repository details
 GITHUB_REPO = "Chakrapani2122/Data"
@@ -34,68 +34,60 @@ def show_view_data_page():
         st.warning("GitHub token is required to access the repository.")
         return
 
-    folder_path = ""
+    research_areas = ["Root Directory", "Ashland", "El Reno", "Perkins"]
+    research_data_folders = {
+        "Ashland": ["Forage", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
+        "El Reno": ["Archive", "Cronos Data", "Field Data"],
+        "Perkins": ["Plant Height & Soil Moisture"]
+    }
+
+    selected_research_area = st.selectbox("**Select Research Area**", research_areas)
+    if selected_research_area == "Root Directory":
+        folder_path = ""
+    else:
+        selected_data_folder = st.selectbox("**Select Research Data Folder**", research_data_folders[selected_research_area])
+        folder_path = f"{selected_research_area}/{selected_data_folder}"
+
     files = get_github_files(folder_path, github_token)
     if files:
-        subdirectories = [file['name'] for file in files if file['type'] == 'dir']
-        root_files = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Select a Folder**")
-            selected_subdirectory = st.selectbox("", ["Root Directory"] + subdirectories)
-        
-        with col2:
-            st.write("**Select a file**")
-            if selected_subdirectory == "Root Directory":
-                file_names = root_files
-            else:
-                subdirectory_files = get_github_files(f"{folder_path}/{selected_subdirectory}", github_token)
-                file_names = [file['name'] for file in subdirectory_files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.dat', '.png', '.jpg', '.jpeg', '.heic', '.md'))]
-            selected_file = st.selectbox("", file_names)
+        file_names = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg', '.md'))]
+        selected_file = st.selectbox("**Select a file**", file_names)
         
         if selected_file:
-            if selected_subdirectory == "Root Directory":
-                file_url = next(file['download_url'] for file in files if file['name'] == selected_file)
-            else:
-                file_url = next(file['download_url'] for file in subdirectory_files if file['name'] == selected_file)
-            
+            file_url = next(file['download_url'] for file in files if file['name'] == selected_file)
             response = requests.get(file_url)
             if response.status_code == 200:
                 try:
                     if selected_file.endswith(".xlsx"):
-                        try:
-                            xls = pd.ExcelFile(BytesIO(response.content))
-                            sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
-                            df = pd.read_excel(BytesIO(response.content), sheet_name=sheet_name)
-                            st.dataframe(df)
-                        except Exception as e:
-                            st.error(f"Error reading the .xlsx file: {e}")
-                            try:
-                                st.text_area("**File Content**", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
-                            except UnicodeDecodeError:
-                                st.text_area("**File Content**", response.content.decode("latin1"), height=300, max_chars=None, key=None, disabled=True)
-                    elif selected_file.endswith(".csv"):
-                        df = pd.read_csv(BytesIO(response.content))
+                        df = pd.read_excel(file_url, engine='openpyxl')
                         st.dataframe(df)
-                    elif selected_file.endswith((".txt", ".dat", ".md")):
-                        try:
-                            file_content = response.content.decode("utf-8")
-                        except UnicodeDecodeError:
-                            file_content = response.content.decode("latin1")
-                        st.text_area("**File Content**", file_content, height=300, max_chars=None, key=None, disabled=True)
-                    elif selected_file.endswith((".jpg", ".jpeg", ".png", ".heic")):
-                        image = Image.open(BytesIO(response.content))
+                    elif selected_file.endswith(".csv"):
+                        df = pd.read_csv(file_url)
+                        st.dataframe(df)
+                    elif selected_file.endswith((".txt", ".md")):
+                        file_content = requests.get(file_url).text
+                        st.text_area("**File Content**", file_content, height=300, max_chars=None, key="text_file")
+                    elif selected_file.endswith((".jpg", ".jpeg", ".png")):
+                        image = Image.open(requests.get(file_url, stream=True).raw)
                         st.image(image, caption=selected_file)
                     else:
-                        st.text_area("**File Content**", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
+                        st.text_area("**File Content**", requests.get(file_url).text, height=300, max_chars=None, key="other_file")
+                    
+                    # Display data types of each column
+                    if selected_file.endswith((".xlsx", ".csv")):
+                        st.subheader("Column Data Types")
+                        column_data = []
+                        for col in df.columns:
+                            column_data.append({
+                                "Column Name": col,
+                                "Data Type": str(df[col].dtype),
+                                "Example Value": df[col].iloc[0] if not df[col].empty else "N/A",
+                                "Description": ""
+                            })
+                        st.table(pd.DataFrame(column_data))
                 except Exception as e:
                     st.error(f"Error reading the file: {e}")
-                    try:
-                        st.text_area("**File Content**", response.content.decode("utf-8"), height=300, max_chars=None, key=None, disabled=True)
-                    except UnicodeDecodeError:
-                        st.text_area("**File Content**", response.content.decode("latin1"), height=300, max_chars=None, key=None, disabled=True)
+                    st.text_area("**File Content**", requests.get(file_url).text, height=300, max_chars=None, key="read_error")
             else:
                 st.error("Failed to fetch file content.")
         else:
