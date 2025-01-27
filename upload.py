@@ -57,7 +57,7 @@ def show_upload_page():
     if github_token:
         commits = get_commit_history(github_token)
         if commits:
-            st.subheader("Last 5 Commits")
+            st.write("**Last 5 Commits**")
             for commit in commits:
                 st.write(f"- {commit['commit']['author']['date']}: {commit['commit']['author']['name']}: {commit['commit']['message']}")
         else:
@@ -70,19 +70,32 @@ def show_upload_page():
         if len(uploaded_file_names) != len(set(uploaded_file_names)):
             st.warning("Duplicate files detected. Please remove duplicate files before uploading.")
         else:
-            selected_file = st.selectbox("**Select a file to view**", uploaded_file_names)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Select a file to view**")
+            with col2:
+                st.write("**Select a sheet (if applicable)**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_file = st.selectbox("", uploaded_file_names)
+            with col2:
+                sheet_name = None
+                for uploaded_file in uploaded_files:
+                    if uploaded_file.name == selected_file and uploaded_file.name.endswith(".xlsx"):
+                        xls = pd.ExcelFile(uploaded_file)
+                        sheet_name = st.selectbox("", xls.sheet_names)
+            st.write("**Showing First 100 Rows:**")
             for uploaded_file in uploaded_files:
                 if uploaded_file.name == selected_file:
                     file_name = uploaded_file.name
                     try:
                         if file_name.endswith(".xlsx"):
-                            xls = pd.ExcelFile(uploaded_file)
-                            sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
                             df = pd.read_excel(xls, sheet_name=sheet_name)
-                            st.dataframe(df)
+                            st.dataframe(df.head(100))
                         elif file_name.endswith(".csv"):
                             df = pd.read_csv(uploaded_file)
-                            st.dataframe(df)
+                            st.dataframe(df.head(100))
                         elif file_name.endswith(".txt") or file_name.endswith(".dat"):
                             file_content = uploaded_file.getvalue().decode("utf-8")
                             st.text_area(file_name, file_content, height=300, max_chars=None, key=None)
@@ -91,8 +104,45 @@ def show_upload_page():
                             st.image(image, caption=file_name)
                         else:
                             st.warning(f"Cannot display content of {file_name} (unsupported file type).")
+                        
+                        # Display data types of each column
+                        if file_name.endswith((".xlsx", ".csv")):
+                            st.write("**Column Data Types**")
+                            column_data = []
+                            for col in df.columns:
+                                column_data.append({
+                                    "Column Name": col,
+                                    "Data Type": str(df[col].dtype)
+                                })
+                            # Organize data types into two columns
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
+                            with col2:
+                                st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
                     except Exception as e:
                         st.warning(f"Cannot display content of {file_name} (error: {e}).")
+            
+            # Research Area and Data Folder Selection
+            research_areas = ["Ashland", "El Reno", "Perkins"]
+            research_data_folders = {
+                "Ashland": ["Forage", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
+                "El Reno": ["Archive", "Cronos Data", "Field Data"],
+                "Perkins": ["Plant Height & Soil Moisture"]
+            }
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Select Research Area**")
+            with col2:
+                st.write("**Select Research Data Folder**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_research_area = st.selectbox("", research_areas)
+            with col2:
+                if selected_research_area:
+                    selected_data_folder = st.selectbox("", research_data_folders[selected_research_area])
             
             upload_status = st.empty()  # Placeholder for upload status message
             file_statuses = []  # List to hold the status of each file
@@ -101,11 +151,12 @@ def show_upload_page():
                 if github_token:
                     for uploaded_file in uploaded_files:
                         file_name = uploaded_file.name
-                        status_code, response = upload_to_github(uploaded_file, file_name, github_token)
+                        path = f"{selected_research_area}/{selected_data_folder}/{file_name}"
+                        status_code, response = upload_to_github(uploaded_file, path, github_token)
                         if status_code == 201:
                             file_statuses.append(f"File '{file_name}' uploaded successfully!")
                         elif status_code == 409:
-                            file_statuses.append(f"File '{file_name}' already exists at path: {file_name}")
+                            file_statuses.append(f"File '{file_name}' already exists at path: {path}")
                         else:
                             file_statuses.append(f"Failed to upload file '{file_name}'. Error: {response}")
                     

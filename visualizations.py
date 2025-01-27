@@ -3,6 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from PIL import Image
+import base64
 
 # GitHub repository details
 GITHUB_REPO = "Chakrapani2122/Data"
@@ -25,7 +26,7 @@ def fetch_description(token):
     }
     response = requests.get(GITHUB_API_URL + "descriptions.xml", headers=headers)
     if response.status_code == 200:
-        return response.content
+        return base64.b64decode(response.json()['content']).decode('utf-8')
     else:
         st.error("Failed to fetch descriptions from GitHub.")
         return None
@@ -35,7 +36,7 @@ def show_visualizations_page():
     st.write("For better experience, please enable the wide mode.")
 
     github_token = st.text_input("Enter your GitHub token", type="password")
-    if (github_token):
+    if github_token:
         visualizations = fetch_visualizations(github_token)
         description_xml = fetch_description(github_token)
 
@@ -47,8 +48,8 @@ def show_visualizations_page():
                     name = viz.find("Name").text
                     description = viz.find("Description").text
                     descriptions[name] = description
-            except ET.ParseError:
-                st.error("Failed to parse descriptions XML.")
+            except ET.ParseError as e:
+                st.error(f"Failed to parse descriptions XML: {e}")
 
         for viz in visualizations:
             if viz['name'].endswith('.png'):
