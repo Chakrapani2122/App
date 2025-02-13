@@ -1,8 +1,10 @@
+import os
 import streamlit as st
 import requests
 import pandas as pd
 from io import BytesIO
 from PIL import Image
+from openpyxl.utils.exceptions import InvalidFileException
 
 # GitHub repository details
 GITHUB_REPO = "Chakrapani2122/Data"
@@ -25,6 +27,14 @@ def get_github_files(path="", token=""):
     else:
         st.error(f"Failed to fetch files from GitHub. Status code: {response.status_code}")
         return []
+
+def get_file_content(file_url):
+    response = requests.get(file_url)
+    if response.status_code == 200:
+        return BytesIO(response.content)
+    else:
+        st.error("Failed to fetch the file content.")
+        return None
 
 def show_view_data_page():
     st.title("View Data")
@@ -68,30 +78,35 @@ def show_view_data_page():
 
     if selected_file:
         file_url = next(file['download_url'] for file in files if file['name'] == selected_file)
-        response = requests.get(file_url)
-        if response.status_code == 200:
+        file_content = get_file_content(file_url)
+        if file_content:
             try:
-                file_content = BytesIO(response.content)
                 if selected_file.endswith(".xlsx"):
-                    xls = pd.ExcelFile(file_content)
-                    sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
-                    df = pd.read_excel(xls, sheet_name=sheet_name)
-                    st.dataframe(df)
+                    try:
+                        xls = pd.ExcelFile(file_content, engine='openpyxl')
+                        sheet_names = xls.sheet_names
+                        selected_sheet = st.selectbox("Select a sheet", sheet_names)
+                        if selected_sheet:
+                            df = pd.read_excel(xls, sheet_name=selected_sheet, keep_default_na=False)
+                            st.dataframe(df)
+                    except InvalidFileException:
+                        st.error("The .xlsx file appears to be invalid or corrupted.")
                 elif selected_file.endswith(".csv"):
-                    df = pd.read_csv(file_content)
+                    df = pd.read_csv(file_content, keep_default_na=False)
                     st.dataframe(df)
                 elif selected_file.endswith((".txt", ".md")):
-                    file_content = response.content.decode('utf-8', errors='replace')
-                    st.text_area("**File Content**", file_content, height=300, max_chars=None, key="text_file")
+                    file_text = file_content.read().decode('utf-8', errors='replace')
+                    st.text_area("**File Content**", file_text, height=300, max_chars=None, key="text_file")
                 elif selected_file.endswith((".jpg", ".jpeg", ".png")):
                     image = Image.open(file_content)
                     st.image(image, caption=selected_file)
                 else:
-                    file_content = response.content.decode('utf-8', errors='replace')
-                    st.text_area("**File Content**", file_content, height=300, max_chars=None, key="other_file")
+                    file_text = file_content.read().decode('utf-8', errors='replace')
+                    st.text_area("**File Content**", file_text, height=300, max_chars=None, key="other_file")
             except Exception as e:
                 st.error(f"Error reading the file: {e}")
-                st.text_area("**File Content**", response.content.decode('utf-8', errors='replace'), height=300, max_chars=None, key="read_error")
+                file_text = file_content.read().decode('utf-8', errors='replace')
+                st.text_area("**File Content**", file_text, height=300, max_chars=None, key="read_error")
         else:
             st.error("Failed to fetch file content.")
     else:
