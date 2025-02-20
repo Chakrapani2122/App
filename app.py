@@ -6,14 +6,14 @@ from visualizations import show_visualizations_page
 from custom_visualizations import show_custom_visualizations_page
 
 # Set the page configuration
-st.set_page_config(page_title="Kansas State University - SMAL Project", page_icon="assets/logo.png", layout="wide")
+st.set_page_config(page_title="Kansas State University - SMAL Lab", page_icon="assets/logo.png", layout="wide")
 
 # Load the logo image
 logo_url = "assets/logo.png"
 
 # Create a sidebar for navigation
 st.sidebar.image(logo_url, width=50)
-st.sidebar.title("SMAL Project")
+st.sidebar.title("SMAL Lab")
 page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Visualizations", "Custom Visualizations", "Contact"], label_visibility="collapsed")
 
 # Define the home page content
@@ -22,7 +22,7 @@ if page == "Home":
     with col1:
         st.image(logo_url, width=100)
     with col2:
-        st.title("Welcome to the SMAL Project")
+        st.title("Welcome to the SMAL Lab")
     st.write("")
     st.write("""
     The Soil Microbial Agroecology Lab (SMAL) at Kansas State University is dedicated to advancing soil health through comprehensive research on water efficiency, nutrient and energy balance, and climate change.
