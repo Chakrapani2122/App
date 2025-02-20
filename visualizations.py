@@ -17,7 +17,7 @@ def fetch_visualizations(token):
     if response.status_code == 200:
         return response.json()
     else:
-        st.error("Failed to fetch visualizations from GitHub.")
+        st.error("Failed to fetch visualizations.")
         return []
 
 def fetch_description(token):
@@ -28,14 +28,14 @@ def fetch_description(token):
     if response.status_code == 200:
         return base64.b64decode(response.json()['content']).decode('utf-8')
     else:
-        st.error("Failed to fetch descriptions from GitHub.")
+        st.error("Failed to fetch descriptions.")
         return None
 
 def show_visualizations_page():
     st.title("Visualizations")
     st.write("For better experience, please enable the wide mode.")
 
-    github_token = st.text_input("Enter your GitHub token", type="password")
+    github_token = st.text_input("Enter security token", type="password")
     if github_token:
         visualizations = fetch_visualizations(github_token)
         description_xml = fetch_description(github_token)

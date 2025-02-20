@@ -96,7 +96,7 @@ def show_custom_visualizations_page():
     st.title("Custom Visualizations")
     st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
 
-    github_token = st.text_input("**Enter your GitHub token**", type="password", key="github_token")
+    github_token = st.text_input("**Enter security token**", type="password", key="github_token")
     df = None
     if github_token:
         st.write("**Select a file from the repository or upload a new file**")

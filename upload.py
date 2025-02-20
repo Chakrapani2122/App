@@ -48,17 +48,17 @@ def get_commit_history(token):
         return []
 
 def show_upload_page():
-    st.title("Upload Files to GitHub")
+    st.title("Upload Files")
     
-    github_token = st.text_input("**Enter your GitHub token**", type="password")
+    github_token = st.text_input("**Enter your security token**", type="password")
     if github_token:
         commits = get_commit_history(github_token)
         if commits:
-            st.write("**Last 5 Commits**")
+            st.write("**Last 5 Updates**")
             for commit in commits:
                 st.write(f"- {commit['commit']['author']['date']}: {commit['commit']['author']['name']}: {commit['commit']['message']}")
         else:
-            st.warning("Failed to retrieve commit history. Please check your GitHub token.")
+            st.warning("Failed to retrieve commit history. Please check your security token.")
     
     uploaded_files = st.file_uploader("**Choose files**", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
     
@@ -163,7 +163,7 @@ def show_upload_page():
                     for status in file_statuses:
                         upload_status.write(status)
                 else:
-                    upload_status.error("GitHub token is required to upload files.")
+                    upload_status.error("security token is required to upload files.")
 
 if __name__ == "__main__":
     show_upload_page()
