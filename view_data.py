@@ -69,10 +69,10 @@ def display_file_content(token, path):
 
 # Function to show the view data page
 def show_view_data_page():
-    st.title("GitHub Repository Explorer")
+    st.title("View Data")
 
     # Input for GitHub PAT
-    token = st.text_input("Enter your GitHub Personal Access Token", type="password", key="github_token")
+    token = st.text_input("Enter security token", type="password", key="github_token")
 
     if token:
         if validate_token(token):
