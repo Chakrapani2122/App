@@ -80,3 +80,4 @@ elif page == "Custom Visualizations":
 # Define the contact page content
 elif page == "Contact":
     show_contact_page()
+

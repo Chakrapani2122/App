@@ -22,10 +22,7 @@ def upload_to_github(file, path, token):
         "Content-Type": "application/json"
     }
     content = file.read()
-    if isinstance(content, bytes):
-        content = base64.b64encode(content).decode("utf-8")
-    else:
-        content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+    content_base64 = base64.b64encode(content).decode("utf-8")
     
     # Check if the file already exists
     response = requests.get(url, headers=headers)
@@ -34,7 +31,7 @@ def upload_to_github(file, path, token):
     
     data = {
         "message": f"Upload {path}",
-        "content": content
+        "content": content_base64
     }
     response = requests.put(url, json=data, headers=headers)
     st.write(f"Upload response status code: {response.status_code}")  # Log the status code
@@ -78,13 +75,13 @@ def show_upload_page():
             
             col1, col2 = st.columns(2)
             with col1:
-                selected_file = st.selectbox("", uploaded_file_names)
+                selected_file = st.selectbox("Select a file", uploaded_file_names, label_visibility="collapsed")
             with col2:
                 sheet_name = None
                 for uploaded_file in uploaded_files:
                     if uploaded_file.name == selected_file and uploaded_file.name.endswith(".xlsx"):
                         xls = pd.ExcelFile(uploaded_file)
-                        sheet_name = st.selectbox("", xls.sheet_names)
+                        sheet_name = st.selectbox("Select a sheet", xls.sheet_names, label_visibility="collapsed")
             st.write("**Showing First 100 Rows:**")
             for uploaded_file in uploaded_files:
                 if uploaded_file.name == selected_file:
@@ -139,10 +136,10 @@ def show_upload_page():
             
             col1, col2 = st.columns(2)
             with col1:
-                selected_research_area = st.selectbox("", research_areas)
+                selected_research_area = st.selectbox("Select Research Area", research_areas, label_visibility="collapsed")
             with col2:
                 if selected_research_area:
-                    selected_data_folder = st.selectbox("", research_data_folders[selected_research_area])
+                    selected_data_folder = st.selectbox("Select Research Data Folder", research_data_folders[selected_research_area], label_visibility="collapsed")
             
             upload_status = st.empty()  # Placeholder for upload status message
             file_statuses = []  # List to hold the status of each file
@@ -152,6 +149,8 @@ def show_upload_page():
                     for uploaded_file in uploaded_files:
                         file_name = uploaded_file.name
                         path = f"{selected_research_area}/{selected_data_folder}/{file_name}"
+                        # Re-read the file content to ensure it is not corrupted
+                        uploaded_file.seek(0)
                         status_code, response = upload_to_github(uploaded_file, path, github_token)
                         if status_code == 201:
                             file_statuses.append(f"File '{file_name}' uploaded successfully!")
