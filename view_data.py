@@ -1,101 +1,113 @@
 import streamlit as st
 import requests
-import pandas as pd
 from io import BytesIO
+import pandas as pd
 from PIL import Image
+from openpyxl.utils.exceptions import InvalidFileException
+import xml.etree.ElementTree as ET
+from pandas.errors import EmptyDataError
 
-# GitHub repository details
-GITHUB_REPO = "Chakrapani2122/Data"
-GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/"
+# Function to validate GitHub PAT
+def validate_token(token):
+    repo = "Chakrapani2122/Data"
+    url = f"https://api.github.com/repos/{repo}"
+    headers = {"Authorization": f"token {token}"}
+    response = requests.get(url, headers=headers)
+    return response.status_code == 200
 
-def get_github_files(path="", token=""):
-    url = GITHUB_API_URL + path
-    headers = {
-        "Authorization": f"token {token}"
-    }
+# Function to get repository contents
+def get_repo_contents(token, path=""):
+    repo = "Chakrapani2122/Data"
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    headers = {"Authorization": f"token {token}"}
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return response.json()
-    elif response.status_code == 401:
-        st.error("Unauthorized access. Please check your GitHub token.")
-        return []
-    elif response.status_code == 404:
-        st.error("Repository or path not found. Please check the folder path.")
-        return []
     else:
-        st.error(f"Failed to fetch files from GitHub. Status code: {response.status_code}")
-        return []
+        return None
 
+# Function to display file content
+def display_file_content(token, path):
+    repo = "Chakrapani2122/Data"
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    headers = {"Authorization": f"token {token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        content = response.json()
+        if content['type'] == 'file':
+            file_content = requests.get(content['download_url']).content
+            if path.endswith(('.xlsx', '.xls')):
+                excel_file = BytesIO(file_content)
+                try:
+                    xls = pd.ExcelFile(excel_file, engine='openpyxl')
+                    sheet = st.selectbox('Select sheet', xls.sheet_names, key="sheet_select")
+                    df = pd.read_excel(excel_file, sheet_name=sheet)
+                    st.dataframe(df)
+                except InvalidFileException:
+                    st.error("The .xlsx file appears to be invalid or corrupted.")
+                except Exception as e:
+                    st.error(f"An error occurred while reading the Excel file: {e}")
+            elif path.endswith('.csv'):
+                try:
+                    df = pd.read_csv(BytesIO(file_content))
+                    st.dataframe(df)
+                except EmptyDataError:
+                    st.error("The CSV file is empty or improperly formatted.")
+                except Exception as e:
+                    st.error(f"An error occurred while reading the CSV file: {e}")
+            elif path.endswith(('.txt', '.md')):
+                st.text(file_content.decode())
+            elif path.endswith(('.jpg', '.jpeg', '.png')):
+                image = Image.open(BytesIO(file_content))
+                st.image(image, caption=path)
+            else:
+                st.text(file_content.decode())
+        else:
+            st.error("Selected path is not a file.")
+    else:
+        st.error("Failed to retrieve file content.")
+
+# Function to show the view data page
 def show_view_data_page():
-    st.title("View Data")
+    st.title("GitHub Repository Explorer")
 
-    github_token = st.text_input("**Enter your GitHub token**", type="password")
-    if not github_token:
-        st.warning("GitHub token is required to access the repository.")
-        return
+    # Input for GitHub PAT
+    token = st.text_input("Enter your GitHub Personal Access Token", type="password", key="github_token")
 
-    research_areas = ["Root Directory", "Ashland", "El Reno", "Perkins"]
-    research_data_folders = {
-        "Ashland": ["Forage", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
-        "El Reno": ["Archive", "Cronos Data", "Field Data"],
-        "Perkins": ["Plant Height & Soil Moisture"]
-    }
+    if token:
+        if validate_token(token):
+            st.success("Token validated successfully!")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write("**Select Research Area**")
-    with col2:
-        st.write("**Select Research Data Folder**")
-    with col3:
-        st.write("**Select a file**")
+            research_areas = ["Root Directory", "Ashland", "El Reno", "Perkins"]
+            research_data_folders = {
+                "Ashland": ["Forage", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
+                "El Reno": ["Archive", "Cronos Data", "Field Data"],
+                "Perkins": ["Plant Height & Soil Moisture"]
+            }
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        selected_research_area = st.selectbox("", research_areas)
-    with col2:
-        if selected_research_area == "Root Directory":
-            folder_path = ""
-        else:
-            selected_data_folder = st.selectbox("", research_data_folders[selected_research_area])
-            folder_path = f"{selected_research_area}/{selected_data_folder}"
-    with col3:
-        files = get_github_files(folder_path, github_token)
-        if files:
-            file_names = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg', '.md'))]
-            selected_file = st.selectbox("", file_names)
-        else:
-            selected_file = None
-
-    if selected_file:
-        file_url = next(file['download_url'] for file in files if file['name'] == selected_file)
-        response = requests.get(file_url)
-        if response.status_code == 200:
-            try:
-                file_content = BytesIO(response.content)
-                if selected_file.endswith(".xlsx"):
-                    xls = pd.ExcelFile(file_content)
-                    sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
-                    df = pd.read_excel(xls, sheet_name=sheet_name)
-                    st.dataframe(df)
-                elif selected_file.endswith(".csv"):
-                    df = pd.read_csv(file_content)
-                    st.dataframe(df)
-                elif selected_file.endswith((".txt", ".md")):
-                    file_content = response.content.decode('utf-8', errors='replace')
-                    st.text_area("**File Content**", file_content, height=300, max_chars=None, key="text_file")
-                elif selected_file.endswith((".jpg", ".jpeg", ".png")):
-                    image = Image.open(file_content)
-                    st.image(image, caption=selected_file)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                selected_research_area = st.selectbox("Select Research Area", research_areas, key="research_area_select")
+            with col2:
+                if selected_research_area == "Root Directory":
+                    folder_path = ""
                 else:
-                    file_content = response.content.decode('utf-8', errors='replace')
-                    st.text_area("**File Content**", file_content, height=300, max_chars=None, key="other_file")
-            except Exception as e:
-                st.error(f"Error reading the file: {e}")
-                st.text_area("**File Content**", response.content.decode('utf-8', errors='replace'), height=300, max_chars=None, key="read_error")
-        else:
-            st.error("Failed to fetch file content.")
-    else:
-        st.warning("No files found in the selected directory.")
+                    selected_data_folder = st.selectbox("Select Research Data Folder", research_data_folders[selected_research_area], key="data_folder_select")
+                    folder_path = f"{selected_research_area}/{selected_data_folder}"
+            with col3:
+                files = get_repo_contents(token, folder_path)
+                if files:
+                    file_names = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg', '.md'))]
+                    selected_file = st.selectbox("Select a file", file_names, key="file_select")
+                else:
+                    selected_file = None
 
-if __name__ == "__main__":
-    show_view_data_page()
+            if selected_file:
+                file_path = f"{folder_path}/{selected_file}" if folder_path else selected_file
+                st.write("**File Contents**")
+                display_file_content(token, file_path)
+        else:
+            st.error("Invalid token.")
+
+
+
