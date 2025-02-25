@@ -4,6 +4,7 @@ from upload import show_upload_page
 from view_data import show_view_data_page
 from visualizations import show_visualizations_page
 from custom_visualizations import show_custom_visualizations_page
+from data_schedule import show_data_schedule_page  # Import the new page
 
 # Set the page configuration
 st.set_page_config(page_title="Kansas State University - SMAL Lab", page_icon="assets/logo.png", layout="wide")
@@ -14,7 +15,7 @@ logo_url = "assets/logo.png"
 # Create a sidebar for navigation
 st.sidebar.image(logo_url, width=50)
 st.sidebar.title("SMAL Lab")
-page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Visualizations", "Custom Visualizations", "Contact"], label_visibility="collapsed")
+page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Data Schedule", "Visualizations", "Custom Visualizations", "Contact"], label_visibility="collapsed")
 
 # Define the home page content
 if page == "Home":
@@ -68,6 +69,10 @@ elif page == "Upload":
 # Define the view data page content
 elif page == "View Data":
     show_view_data_page()
+
+# Define the data schedule page content
+elif page == "Data Schedule":
+    show_data_schedule_page()
 
 # Define the visualizations page content
 elif page == "Visualizations":
