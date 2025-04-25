@@ -105,7 +105,7 @@ def show_custom_visualizations_page():
         if option == "Select from repository":
             research_areas = ["Select the file", "Ashland", "El Reno", "Perkins"]
             research_data_folders = {
-                "Ashland": ["Forage", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
+                "Ashland": ["Forage", "Micrometereology", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
                 "El Reno": ["Archive", "Cronos Data", "Field Data"],
                 "Perkins": ["Plant Height & Soil Moisture"]
             }
