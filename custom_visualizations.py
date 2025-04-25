@@ -92,6 +92,21 @@ def display_file_content(token, path):
         st.error("Failed to retrieve file content.")
     return None
 
+def show_column_data_types(df):
+    with st.expander("**Show Column Data Types**", expanded=False):
+        column_data = []
+        for col in df.columns:
+            column_data.append({
+                "Column Name": col,
+                "Data Type": str(df[col].dtype)
+            })
+        # Organize data types into two columns
+        col1, col2 = st.columns(2)
+        with col1:
+            st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
+        with col2:
+            st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
+
 def show_custom_visualizations_page():
     st.title("🎨 Custom Visualizations")
     st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
@@ -148,21 +163,7 @@ def show_custom_visualizations_page():
 
         if df is not None:
             # Display data types of each column
-            st.markdown("**Data Types:**")
-            col1, col2, col3, col4 = st.columns(4)
-            for i, (col, dtype) in enumerate(df.dtypes.items()):
-                if i % 4 == 0:
-                    with col1:
-                        st.write(f"{col}: {dtype}")
-                elif i % 4 == 1:
-                    with col2:
-                        st.write(f"{col}: {dtype}")
-                elif i % 4 == 2:
-                    with col3:
-                        st.write(f"{col}: {dtype}")
-                else:
-                    with col4:
-                        st.write(f"{col}: {dtype}")
+            show_column_data_types(df)
             st.write("---")
 
             columns = df.columns.tolist()

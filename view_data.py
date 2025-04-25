@@ -26,6 +26,22 @@ def get_repo_contents(token, path=""):
     else:
         return None
 
+# Function to display column data types
+def show_column_data_types(df):
+    with st.expander("**Show Column Data Types**", expanded=False):
+        column_data = []
+        for col in df.columns:
+            column_data.append({
+                "Column Name": col,
+                "Data Type": str(df[col].dtype)
+            })
+        # Organize data types into two columns
+        col1, col2 = st.columns(2)
+        with col1:
+            st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
+        with col2:
+            st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
+
 # Function to display file content
 def display_file_content(token, path):
     repo = "Chakrapani2122/Data"
@@ -43,6 +59,7 @@ def display_file_content(token, path):
                     sheet = st.selectbox('Select sheet', xls.sheet_names, key="sheet_select")
                     df = pd.read_excel(excel_file, sheet_name=sheet)
                     st.dataframe(df)
+                    show_column_data_types(df)
                 except InvalidFileException:
                     st.error("The .xlsx file appears to be invalid or corrupted.")
                 except Exception as e:
@@ -51,6 +68,7 @@ def display_file_content(token, path):
                 try:
                     df = pd.read_csv(BytesIO(file_content))
                     st.dataframe(df)
+                    show_column_data_types(df)
                 except EmptyDataError:
                     st.error("The CSV file is empty or improperly formatted.")
                 except Exception as e:

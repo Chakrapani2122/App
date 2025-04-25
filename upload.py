@@ -47,18 +47,36 @@ def get_commit_history(token):
     else:
         return []
 
+def show_commit_history(token):
+    commits = get_commit_history(token)
+    if commits:
+        with st.expander("**Last 5 Updates**", expanded=False):
+            for commit in commits:
+                st.write(f"- {commit['commit']['author']['date']}: {commit['commit']['message']}")
+    else:
+        st.warning("Failed to retrieve commit history. Please check your security token.")
+
+def show_column_data_types(df):
+    with st.expander("**Show Column Data Types**", expanded=False):
+        column_data = []
+        for col in df.columns:
+            column_data.append({
+                "Column Name": col,
+                "Data Type": str(df[col].dtype)
+            })
+        # Organize data types into two columns
+        col1, col2 = st.columns(2)
+        with col1:
+            st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
+        with col2:
+            st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
+
 def show_upload_page():
     st.title("📎 Upload Files")
     
     github_token = st.text_input("**Enter your security token**", type="password")
     if github_token:
-        commits = get_commit_history(github_token)
-        if commits:
-            st.write("**Last 5 Updates**")
-            for commit in commits:
-                st.write(f"- {commit['commit']['author']['date']}: {commit['commit']['author']['name']}: {commit['commit']['message']}")
-        else:
-            st.warning("Failed to retrieve commit history. Please check your security token.")
+        show_commit_history(github_token)
     
     uploaded_files = st.file_uploader("**Choose files**", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
     
@@ -104,19 +122,7 @@ def show_upload_page():
                         
                         # Display data types of each column
                         if file_name.endswith((".xlsx", ".csv")):
-                            st.write("**Column Data Types**")
-                            column_data = []
-                            for col in df.columns:
-                                column_data.append({
-                                    "Column Name": col,
-                                    "Data Type": str(df[col].dtype)
-                                })
-                            # Organize data types into two columns
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
-                            with col2:
-                                st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
+                            show_column_data_types(df)
                     except Exception as e:
                         st.warning(f"Cannot display content of {file_name} (error: {e}).")
             
