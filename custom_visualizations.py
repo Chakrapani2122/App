@@ -93,7 +93,7 @@ def display_file_content(token, path):
     return None
 
 def show_custom_visualizations_page():
-    st.title("Custom Visualizations")
+    st.title("🎨 Custom Visualizations")
     st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
 
     github_token = st.text_input("**Enter security token**", type="password", key="github_token")

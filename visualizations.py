@@ -32,7 +32,7 @@ def fetch_description(token):
         return None
 
 def show_visualizations_page():
-    st.title("Visualizations")
+    st.title("📈 Visualizations")
     st.write("For better experience, please enable the wide mode.")
 
     github_token = st.text_input("Enter security token", type="password")

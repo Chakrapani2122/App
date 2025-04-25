@@ -48,7 +48,7 @@ def get_commit_history(token):
         return []
 
 def show_upload_page():
-    st.title("Upload Files")
+    st.title("📎 Upload Files")
     
     github_token = st.text_input("**Enter your security token**", type="password")
     if github_token:
