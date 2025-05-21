@@ -3,6 +3,7 @@ import requests
 from io import BytesIO
 import pandas as pd
 from PIL import Image
+from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 import xml.etree.ElementTree as ET
 from pandas.errors import EmptyDataError
@@ -60,6 +61,7 @@ def display_file_content(token, path):
                     df = pd.read_excel(excel_file, sheet_name=sheet)
                     st.dataframe(df)
                     show_column_data_types(df)
+                    return df
                 except InvalidFileException:
                     st.error("The .xlsx file appears to be invalid or corrupted.")
                 except Exception as e:
@@ -69,6 +71,7 @@ def display_file_content(token, path):
                     df = pd.read_csv(BytesIO(file_content))
                     st.dataframe(df)
                     show_column_data_types(df)
+                    return df
                 except EmptyDataError:
                     st.error("The CSV file is empty or improperly formatted.")
                 except Exception as e:
@@ -84,6 +87,7 @@ def display_file_content(token, path):
             st.error("Selected path is not a file.")
     else:
         st.error("Failed to retrieve file content.")
+    return None
 
 # Function to show the view data page
 def show_view_data_page():
@@ -96,7 +100,7 @@ def show_view_data_page():
         if validate_token(token):
             st.success("Token validated successfully!")
 
-            research_areas = ["Root Directory", "Ashland", "El Reno", "Perkins"]
+            research_areas = ["Ashland", "El Reno", "Perkins"]  # Removed "Root Directory"
             research_data_folders = {
                 "Ashland": ["Forage", "Micrometereology", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
                 "El Reno": ["Archive", "Cronos Data", "Field Data"],
@@ -123,7 +127,35 @@ def show_view_data_page():
             if selected_file:
                 file_path = f"{folder_path}/{selected_file}" if folder_path else selected_file
                 st.write("**File Contents**")
-                display_file_content(token, file_path)
+                df = display_file_content(token, file_path)
+                
+                # Add an expander below the data types button to display additional data insights
+                with st.expander("**Expand to view data insights**", expanded=False):
+                    # Ensure df is defined before using it
+                    if df is not None:
+                        # Display the shape of the DataFrame
+                        st.write(f"**Shape:** {df.shape[0]} rows and {df.shape[1]} columns")
+
+                        # Display the number of missing values in each column using a table with multiple columns
+                        missing_values = pd.DataFrame({
+                            "Column Name": df.columns,
+                            "Missing Values": df.isnull().sum().values
+                        })
+
+                        st.write("**Missing Values:**")
+                        num_columns = 4  # Number of columns to display side by side
+                        columns = st.columns(num_columns)
+
+                        for i, row in missing_values.iterrows():
+                            col_index = i % num_columns
+                            with columns[col_index]:
+                                st.write(f"{row['Column Name']}: {row['Missing Values']}")
+
+                        # Display the statistical analysis summary
+                        st.write("**Descriptive Analysis:**")
+                        st.dataframe(df.describe())
+                    else:
+                        st.warning("No data available to display insights.")
         else:
             st.error("Invalid token.")
 

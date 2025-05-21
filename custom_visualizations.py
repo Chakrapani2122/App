@@ -180,7 +180,10 @@ def show_custom_visualizations_page():
             
             with col3:
                 st.write("**Plot type**")
-                plot_type = st.selectbox("Select Plot Type", ["Scatter Plot", "Line Plot", "Bar Plot", "Histogram", "Box Plot", "Violin Plot"], key="plot_type")
+                plot_type = st.selectbox("Select Plot Type", [
+                    "Scatter Plot", "Line Plot", "Bar Plot", "Histogram", "Box Plot", "Violin Plot",
+                    "Heatmap", "Pair Plot", "Regression Plot", "Density Plot", "Swarm Plot"
+                ], key="plot_type")
 
             if st.button("Generate Plot"):
                 plt.figure(figsize=(10, 6))
@@ -188,26 +191,48 @@ def show_custom_visualizations_page():
                     if plot_type == "Scatter Plot":
                         for y in y_axis:
                             sns.scatterplot(data=df, x=x_axis[0], y=y, label=y)
+                        plt.legend()
                     elif plot_type == "Line Plot":
                         for y in y_axis:
                             sns.lineplot(data=df, x=x_axis[0], y=y, label=y)
+                        plt.legend()
                     elif plot_type == "Bar Plot":
                         for y in y_axis:
                             sns.barplot(data=df, x=x_axis[0], y=y, label=y)
+                        plt.legend()
                     elif plot_type == "Histogram":
                         for y in y_axis:
                             sns.histplot(data=df, x=x_axis[0], y=y, bins=30, label=y)
+                        plt.legend()
                     elif plot_type == "Box Plot":
                         sns.boxplot(data=df, x=x_axis[0], y=y_axis)
+                        plt.legend()
                     elif plot_type == "Violin Plot":
                         sns.violinplot(data=df, x=x_axis[0], y=y_axis)
-                    
+                        plt.legend()
+                    elif plot_type == "Heatmap":
+                        sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
+                        plt.legend()
+                    elif plot_type == "Pair Plot":
+                        sns.pairplot(df)
+                        plt.legend()
+                    elif plot_type == "Regression Plot":
+                        for y in y_axis:
+                            sns.regplot(data=df, x=x_axis[0], y=y)
+                        plt.legend()
+                    elif plot_type == "Density Plot":
+                        sns.kdeplot(data=df, x=x_axis[0], hue=y_axis[0], fill=True)
+                        plt.legend()
+                    elif plot_type == "Swarm Plot":
+                        sns.swarmplot(data=df, x=x_axis[0], y=y_axis)
+                        plt.legend()
+
                     plt.xlabel(", ".join(x_axis))
                     plt.ylabel(", ".join(y_axis))
                     plt.legend()
                     plt.title(f"{plot_type} of {', '.join(y_axis)} vs {', '.join(x_axis)}")
                     st.pyplot(plt)
-                    
+
                     # Save the plot to session state
                     img_buffer = BytesIO()
                     plt.savefig(img_buffer, format='png')

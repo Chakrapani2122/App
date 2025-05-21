@@ -13,7 +13,6 @@ except ImportError:
 # GitHub repository details
 GITHUB_REPO = "Chakrapani2122/Data"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/"
-GITHUB_COMMITS_URL = f"https://api.github.com/repos/{GITHUB_REPO}/commits"
 
 def upload_to_github(file, path, token):
     url = GITHUB_API_URL + path
@@ -37,25 +36,6 @@ def upload_to_github(file, path, token):
     st.write(f"Upload response status code: {response.status_code}")  # Log the status code
     return response.status_code, response.json()
 
-def get_commit_history(token):
-    headers = {
-        "Authorization": f"token {token}"
-    }
-    response = requests.get(GITHUB_COMMITS_URL, headers=headers)
-    if response.status_code == 200:
-        return response.json()[:5]  # Get the last 5 commits
-    else:
-        return []
-
-def show_commit_history(token):
-    commits = get_commit_history(token)
-    if commits:
-        with st.expander("**Last 5 Updates**", expanded=False):
-            for commit in commits:
-                st.write(f"- {commit['commit']['author']['date']}: {commit['commit']['message']}")
-    else:
-        st.warning("Failed to retrieve commit history. Please check your security token.")
-
 def show_column_data_types(df):
     with st.expander("**Show Column Data Types**", expanded=False):
         column_data = []
@@ -75,8 +55,6 @@ def show_upload_page():
     st.title("📎 Upload Files")
     
     github_token = st.text_input("**Enter your security token**", type="password")
-    if github_token:
-        show_commit_history(github_token)
     
     uploaded_files = st.file_uploader("**Choose files**", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
     
@@ -101,31 +79,32 @@ def show_upload_page():
                         xls = pd.ExcelFile(uploaded_file)
                         sheet_name = st.selectbox("Select a sheet", xls.sheet_names, label_visibility="collapsed")
             st.write("**Showing First 100 Rows:**")
-            for uploaded_file in uploaded_files:
-                if uploaded_file.name == selected_file:
-                    file_name = uploaded_file.name
-                    try:
-                        if file_name.endswith(".xlsx"):
-                            df = pd.read_excel(xls, sheet_name=sheet_name)
-                            st.dataframe(df.head(100))
-                        elif file_name.endswith(".csv"):
-                            df = pd.read_csv(uploaded_file)
-                            st.dataframe(df.head(100))
-                        elif file_name.endswith(".txt") or file_name.endswith(".dat"):
-                            file_content = uploaded_file.getvalue().decode("utf-8")
-                            st.text_area(file_name, file_content, height=300, max_chars=None, key=None)
-                        elif file_name.endswith(".jpg") or file_name.endswith(".png"):
-                            image = Image.open(uploaded_file)
-                            st.image(image, caption=file_name)
-                        else:
-                            st.warning(f"Cannot display content of {file_name} (unsupported file type).")
-                        
-                        # Display data types of each column
-                        if file_name.endswith((".xlsx", ".csv")):
-                            show_column_data_types(df)
-                    except Exception as e:
-                        st.warning(f"Cannot display content of {file_name} (error: {e}).")
-            
+            with st.expander("Expand to view the first 100 rows", expanded=True):
+                for uploaded_file in uploaded_files:
+                    if uploaded_file.name == selected_file:
+                        file_name = uploaded_file.name
+                        try:
+                            if file_name.endswith(".xlsx"):
+                                df = pd.read_excel(xls, sheet_name=sheet_name)
+                                st.dataframe(df.head(100))
+                            elif file_name.endswith(".csv"):
+                                df = pd.read_csv(uploaded_file)
+                                st.dataframe(df.head(100))
+                            elif file_name.endswith(".txt") or file_name.endswith(".dat"):
+                                file_content = uploaded_file.getvalue().decode("utf-8")
+                                st.text_area(file_name, file_content, height=300, max_chars=None, key=None)
+                            elif file_name.endswith(".jpg") or file_name.endswith(".png"):
+                                image = Image.open(uploaded_file)
+                                st.image(image, caption=file_name)
+                            else:
+                                st.warning(f"Cannot display content of {file_name} (unsupported file type).")
+                        except Exception as e:
+                            st.warning(f"Cannot display content of {file_name} (error: {e}).")
+
+            # Display data types of each column
+            if file_name.endswith((".xlsx", ".csv")):
+                show_column_data_types(df)
+
             # Research Area and Data Folder Selection
             research_areas = ["Ashland", "El Reno", "Perkins"]
             research_data_folders = {
