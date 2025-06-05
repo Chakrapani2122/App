@@ -100,62 +100,55 @@ def show_view_data_page():
         if validate_token(token):
             st.success("Token validated successfully!")
 
-            research_areas = ["Ashland", "El Reno", "Perkins"]  # Removed "Root Directory"
-            research_data_folders = {
-                "Ashland": ["Forage", "Micrometereology", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
-                "El Reno": ["Archive", "Cronos Data", "Field Data"],
-                "Perkins": ["Plant Height & Soil Moisture"]
-            }
+            research_areas = get_repo_contents(token)
+            research_area_names = [area['name'] for area in research_areas if area['type'] == 'dir']
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                selected_research_area = st.selectbox("Select Research Area", research_areas, key="research_area_select")
-            with col2:
-                if selected_research_area == "Root Directory":
-                    folder_path = ""
-                else:
-                    selected_data_folder = st.selectbox("Select Research Data Folder", research_data_folders[selected_research_area], key="data_folder_select")
-                    folder_path = f"{selected_research_area}/{selected_data_folder}"
-            with col3:
-                files = get_repo_contents(token, folder_path)
-                if files:
-                    file_names = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg', '.md'))]
-                    selected_file = st.selectbox("Select a file", file_names, key="file_select")
-                else:
-                    selected_file = None
+                selected_research_area = st.selectbox("Select Research Area", research_area_names, key="research_area_select")
 
-            if selected_file:
-                file_path = f"{folder_path}/{selected_file}" if folder_path else selected_file
-                st.write("**File Contents**")
-                df = display_file_content(token, file_path)
-                
-                # Add an expander below the data types button to display additional data insights
-                with st.expander("**Expand to view data insights**", expanded=False):
-                    # Ensure df is defined before using it
-                    if df is not None:
-                        # Display the shape of the DataFrame
-                        st.write(f"**Shape:** {df.shape[0]} rows and {df.shape[1]} columns")
+            if selected_research_area:
+                selected_area_contents = get_repo_contents(token, selected_research_area)
+                folder_names = [folder['name'] for folder in selected_area_contents if folder['type'] == 'dir']
 
-                        # Display the number of missing values in each column using a table with multiple columns
-                        missing_values = pd.DataFrame({
-                            "Column Name": df.columns,
-                            "Missing Values": df.isnull().sum().values
-                        })
+                with col2:
+                    selected_data_folder = st.selectbox("Select Research Data Folder", folder_names, key="data_folder_select")
 
-                        st.write("**Missing Values:**")
-                        num_columns = 4  # Number of columns to display side by side
-                        columns = st.columns(num_columns)
+                if selected_data_folder:
+                    selected_folder_contents = get_repo_contents(token, f"{selected_research_area}/{selected_data_folder}")
+                    file_names = [file['name'] for file in selected_folder_contents if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg', '.md'))]
 
-                        for i, row in missing_values.iterrows():
-                            col_index = i % num_columns
-                            with columns[col_index]:
-                                st.write(f"{row['Column Name']}: {row['Missing Values']}")
+                    with col3:
+                        selected_file = st.selectbox("Select a file", file_names, key="file_select")
 
-                        # Display the statistical analysis summary
-                        st.write("**Descriptive Analysis:**")
-                        st.dataframe(df.describe())
-                    else:
-                        st.warning("No data available to display insights.")
+                    if selected_file:
+                        file_path = f"{selected_research_area}/{selected_data_folder}/{selected_file}"
+                        st.write("**File Contents**")
+                        df = display_file_content(token, file_path)
+
+                        # Add an expander below the data types button to display additional data insights
+                        with st.expander("**Expand to view data insights**", expanded=False):
+                            if df is not None:
+                                st.write(f"**Shape:** {df.shape[0]} rows and {df.shape[1]} columns")
+                                missing_values = pd.DataFrame({
+                                    "Column Name": df.columns,
+                                    "Missing Values": df.isnull().sum().values
+                                })
+                                missing_values = missing_values[missing_values["Missing Values"] > 0]  # Filter columns with missing values > 0
+                                if not missing_values.empty:
+                                    st.write("**Missing Values:**")
+                                    num_columns = 4
+                                    columns = st.columns(num_columns)
+                                    for i, row in missing_values.iterrows():
+                                        col_index = i % num_columns
+                                        with columns[col_index]:
+                                            st.write(f"{row['Column Name']}: {row['Missing Values']}")
+                                else:
+                                    st.write("**Missing Values:** There are no missing values in this sheet.")
+                                st.write("**Descriptive Analysis:**")
+                                st.dataframe(df.describe())
+                            else:
+                                st.warning("No data available to display insights.")
         else:
             st.error("Invalid token.")
 

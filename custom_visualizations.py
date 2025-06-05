@@ -70,7 +70,6 @@ def display_file_content(token, path):
                     xls = pd.ExcelFile(excel_file, engine='openpyxl')
                     sheet = st.selectbox('Select sheet', xls.sheet_names, key="sheet_select")
                     df = pd.read_excel(excel_file, sheet_name=sheet)
-                    st.dataframe(df)
                 except ValueError:
                     st.error("The .xlsx file appears to be invalid or corrupted.")
                 except Exception as e:
@@ -78,7 +77,6 @@ def display_file_content(token, path):
             elif path.endswith('.csv'):
                 try:
                     df = pd.read_csv(BytesIO(file_content))
-                    st.dataframe(df)
                 except EmptyDataError:
                     st.error("The CSV file is empty or improperly formatted.")
                 except Exception as e:
@@ -118,36 +116,35 @@ def show_custom_visualizations_page():
         option = st.radio("Choose an option", ["Select from repository", "Upload new file"], key="file_option")
 
         if option == "Select from repository":
-            research_areas = ["Select the file", "Ashland", "El Reno", "Perkins"]
-            research_data_folders = {
-                "Ashland": ["Forage", "Micrometereology", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
-                "El Reno": ["Archive", "Cronos Data", "Field Data"],
-                "Perkins": ["Plant Height & Soil Moisture"]
-            }
+            research_areas = get_repo_contents(github_token)
+            research_area_names = [area['name'] for area in research_areas if area['type'] == 'dir' and area['name'] != 'visualizations']
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                selected_research_area = st.selectbox("Select Research Area", research_areas, key="research_area_select")
-            with col2:
-                if selected_research_area == "Select the file":
-                    folder_path = ""
-                else:
-                    selected_data_folder = st.selectbox("Select Research Data Folder", research_data_folders[selected_research_area], key="data_folder_select")
-                    folder_path = f"{selected_research_area}/{selected_data_folder}"
-            with col3:
-                files = get_repo_contents(github_token, folder_path)
-                if files:
-                    file_names = [file['name'] for file in files if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv'))]
-                    selected_file = st.selectbox("Select a file", file_names, key="file_select")
-                else:
-                    selected_file = None
+                selected_research_area = st.selectbox("Select Research Area", research_area_names, key="research_area_select")
 
-            if selected_file:
-                file_path = f"{folder_path}/{selected_file}" if folder_path else selected_file
-                st.write("**File Contents**")
-                df = display_file_content(github_token, file_path)
-            else:
-                st.info("Please select a file to start building visualizations.")
+            if selected_research_area:
+                selected_area_contents = get_repo_contents(github_token, selected_research_area)
+                folder_names = [folder['name'] for folder in selected_area_contents if folder['type'] == 'dir']
+
+                with col2:
+                    selected_data_folder = st.selectbox("Select Research Data Folder", folder_names, key="data_folder_select")
+
+                if selected_data_folder:
+                    selected_folder_contents = get_repo_contents(github_token, f"{selected_research_area}/{selected_data_folder}")
+                    file_names = [file['name'] for file in selected_folder_contents if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv'))]
+
+                    with col3:
+                        selected_file = st.selectbox("Select a file", file_names, key="file_select")
+
+                    if selected_file:
+                        file_path = f"{selected_research_area}/{selected_data_folder}/{selected_file}"
+                        st.write("**File Contents**")
+                        df = display_file_content(github_token, file_path)
+                        with st.expander("**Data Preview**", expanded=False):
+                            st.dataframe(df)
+                    else:
+                        st.info("Please select a file to start building visualizations.")
         else:
             uploaded_file = st.file_uploader("**Choose a CSV or Excel file**", type=["csv", "xlsx"])
             if uploaded_file is not None:

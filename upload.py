@@ -51,6 +51,39 @@ def show_column_data_types(df):
         with col2:
             st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
 
+def get_repo_contents(token, path=""):
+    url = GITHUB_API_URL + path
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        st.error(f"Failed to fetch repository contents: {response.status_code} - {response.text}")
+        return []
+
+def display_file_content(token, path):
+    url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{path}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        content_type = response.headers.get('Content-Type', '')
+        if 'application/vnd.ms-excel' in content_type or 'application/octet-stream' in content_type:
+            return pd.read_excel(response.content)
+        elif 'text/csv' in content_type:
+            return pd.read_csv(response.content.decode('utf-8'))
+        else:
+            st.warning(f"Unsupported file type for preview: {content_type}")
+            return pd.DataFrame()  # Return empty DataFrame for unsupported types
+    else:
+        st.error(f"Failed to fetch file content: {response.status_code} - {response.text}")
+        return pd.DataFrame()  # Return empty DataFrame on error
+
 def show_upload_page():
     st.title("📎 Upload Files")
     
@@ -106,49 +139,44 @@ def show_upload_page():
                 show_column_data_types(df)
 
             # Research Area and Data Folder Selection
-            research_areas = ["Ashland", "El Reno", "Perkins"]
-            research_data_folders = {
-                "Ashland": ["Forage", "Micrometereology", "Soil Biology & Biochemistry", "Soil Fertility", "Soil Health", "Soil Moisture", "Soil Water Lab", "Summer Crops", "Winter Crops"],
-                "El Reno": ["Archive", "Cronos Data", "Field Data"],
-                "Perkins": ["Plant Height & Soil Moisture"]
-            }
-            
+            research_areas = get_repo_contents(github_token)
+            research_area_names = [area['name'] for area in research_areas if area['type'] == 'dir']
+
             col1, col2 = st.columns(2)
             with col1:
-                st.write("**Select Research Area**")
-            with col2:
-                st.write("**Select Research Data Folder**")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_research_area = st.selectbox("Select Research Area", research_areas, label_visibility="collapsed")
-            with col2:
-                if selected_research_area:
-                    selected_data_folder = st.selectbox("Select Research Data Folder", research_data_folders[selected_research_area], label_visibility="collapsed")
-            
-            upload_status = st.empty()  # Placeholder for upload status message
-            file_statuses = []  # List to hold the status of each file
-            
-            if st.button("Upload"):
-                if github_token:
-                    for uploaded_file in uploaded_files:
-                        file_name = uploaded_file.name
-                        path = f"{selected_research_area}/{selected_data_folder}/{file_name}"
-                        # Re-read the file content to ensure it is not corrupted
-                        uploaded_file.seek(0)
-                        status_code, response = upload_to_github(uploaded_file, path, github_token)
-                        if status_code == 201:
-                            file_statuses.append(f"File '{file_name}' uploaded successfully!")
-                        elif status_code == 409:
-                            file_statuses.append(f"File '{file_name}' already exists at path: {path}")
+                selected_research_area = st.selectbox("Select Research Area", research_area_names, key="research_area_select")
+
+            if selected_research_area:
+                selected_area_contents = get_repo_contents(github_token, selected_research_area)
+                folder_names = [folder['name'] for folder in selected_area_contents if folder['type'] == 'dir']
+
+                with col2:
+                    selected_data_folder = st.selectbox("Select Research Data Folder", folder_names, key="data_folder_select")
+
+                if selected_data_folder:
+                    upload_status = st.empty()  # Placeholder for upload status message
+                    file_statuses = []  # List to hold the status of each file
+
+                    if st.button("Upload"):
+                        if github_token:
+                            for uploaded_file in uploaded_files:
+                                file_name = uploaded_file.name
+                                path = f"{selected_research_area}/{selected_data_folder}/{file_name}"
+                                # Re-read the file content to ensure it is not corrupted
+                                uploaded_file.seek(0)
+                                status_code, response = upload_to_github(uploaded_file, path, github_token)
+                                if status_code == 201:
+                                    file_statuses.append(f"File '{file_name}' uploaded successfully!")
+                                elif status_code == 409:
+                                    file_statuses.append(f"File '{file_name}' already exists at path: {path}")
+                                else:
+                                    file_statuses.append(f"Failed to upload file '{file_name}'. Error: {response}")
+
+                            # Display the status of each file
+                            for status in file_statuses:
+                                upload_status.write(status)
                         else:
-                            file_statuses.append(f"Failed to upload file '{file_name}'. Error: {response}")
-                    
-                    # Display the status of each file
-                    for status in file_statuses:
-                        upload_status.write(status)
-                else:
-                    upload_status.error("security token is required to upload files.")
+                            upload_status.error("Security token is required to upload files.")
 
 if __name__ == "__main__":
     show_upload_page()
