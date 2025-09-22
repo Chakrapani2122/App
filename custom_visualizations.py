@@ -47,6 +47,7 @@ def validate_xml(xml_content):
     except ET.ParseError:
         return False
 
+@st.cache_data(ttl=300)
 def get_repo_contents(token, path=""):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {token}"}
@@ -105,11 +106,27 @@ def show_column_data_types(df):
         with col2:
             st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
 
-def show_custom_visualizations_page():
-    st.title("🎨 Custom Visualizations")
-    st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
+def show_custom_visualizations_page(github_token: str | None = None, show_header: bool = True):
+    # Optionally render header/subtitle when used as a standalone page
+    if show_header:
+        st.title("🎨 Custom Visualizations")
+        st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
 
-    github_token = st.text_input("**Enter security token**", type="password", key="github_token")
+    # If token wasn't provided, try to read from session state
+    if not github_token:
+        github_token = st.session_state.get('github_token')
+    # If still no token and header is shown, prompt for it here and validate/persist
+    if not github_token and show_header:
+        input_token = st.text_input("**Enter security token**", type="password", key="custom_viz_token_input")
+        if input_token:
+            headers = {"Authorization": f"token {input_token}"}
+            test = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}", headers=headers)
+            if test.status_code == 200:
+                st.success("Token validated and saved for this session.")
+                st.session_state['github_token'] = input_token
+                github_token = input_token
+            else:
+                st.error("Invalid token or insufficient permissions.")
     df = None
     if github_token:
         st.write("**Select a file from the repository or upload a new file**")

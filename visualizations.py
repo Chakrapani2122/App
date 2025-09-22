@@ -9,7 +9,9 @@ import base64
 GITHUB_REPO = "Chakrapani2122/Data"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/visualizations/"
 
+@st.cache_data(ttl=300)
 def fetch_visualizations(token):
+    # Return list of files in the visualizations folder. Cached for 5 minutes.
     headers = {
         "Authorization": f"token {token}"
     }
@@ -17,9 +19,10 @@ def fetch_visualizations(token):
     if response.status_code == 200:
         return response.json()
     else:
-        st.error("Failed to fetch visualizations.")
+        # Let caller handle errors; return empty list to avoid crashes
         return []
 
+@st.cache_data(ttl=300)
 def fetch_description(token):
     headers = {
         "Authorization": f"token {token}"
@@ -28,14 +31,32 @@ def fetch_description(token):
     if response.status_code == 200:
         return base64.b64decode(response.json()['content']).decode('utf-8')
     else:
-        st.error("Failed to fetch descriptions.")
         return None
 
-def show_visualizations_page():
-    st.title("📈 Visualizations")
-    st.write("For better experience, please enable the wide mode.")
+def show_visualizations_page(github_token: str | None = None, show_header: bool = True):
+    # Optionally render header/subtitle when used as a standalone page
+    if show_header:
+        st.title("📈 Visualizations")
+        st.write("For better experience, please enable the wide mode.")
 
-    github_token = st.text_input("Enter security token", type="password")
+    # If token wasn't provided, try to read from session state
+    if not github_token:
+        github_token = st.session_state.get('github_token')
+
+    # If still no token and header is shown, prompt for it here and validate/persist
+    if not github_token and show_header:
+        input_token = st.text_input("Enter GitHub security token", type="password", key="viz_token_input")
+        if input_token:
+            # quick validation call
+            headers = {"Authorization": f"token {input_token}"}
+            test = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}", headers=headers)
+            if test.status_code == 200:
+                st.success("Token validated and saved for this session.")
+                st.session_state['github_token'] = input_token
+                github_token = input_token
+            else:
+                st.error("Invalid token or insufficient permissions.")
+
     if github_token:
         visualizations = fetch_visualizations(github_token)
         description_xml = fetch_description(github_token)

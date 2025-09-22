@@ -26,7 +26,9 @@ if logo_url:
     st.sidebar.image(logo_url, width=50)
 
 st.sidebar.title("SMAL Lab")
-page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Data Schedule", "Visualizations", "Custom Visualizations", "Contact"], label_visibility="collapsed")
+
+# Navigation
+page = st.sidebar.radio("Navigation", ["Home", "Upload", "View Data", "Data Schedule", "Visualizations", "Contact"], label_visibility="collapsed")
 
 # Define the home page content
 if page == "Home":
@@ -140,13 +142,17 @@ elif page == "View Data":
 elif page == "Data Schedule":
     show_data_schedule_page()
 
-# Define the visualizations page content
+# Define the visualizations page content (combined)
 elif page == "Visualizations":
-    show_visualizations_page()
+    # Use tabs to switch between the gallery and custom visualizations
+    tab_gallery, tab_custom = st.tabs(["Gallery", "Custom"])
 
-# Define the custom visualizations page content
-elif page == "Custom Visualizations":
-    show_custom_visualizations_page()
+    with tab_gallery:
+        # Let the module render its own header and prompt for a token if needed
+        show_visualizations_page(None, show_header=True)
+
+    with tab_custom:
+        show_custom_visualizations_page(None, show_header=True)
 
 # Define the contact page content
 elif page == "Contact":
