@@ -51,6 +51,7 @@ def show_column_data_types(df):
         with col2:
             st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
 
+@st.cache_data(ttl=300)
 def get_repo_contents(token, path=""):
     url = GITHUB_API_URL + path
     headers = {
@@ -87,7 +88,20 @@ def display_file_content(token, path):
 def show_upload_page():
     st.title("📎 Upload Files")
     
-    github_token = st.text_input("**Enter your security token**", type="password")
+    # Use centralized token if available
+    github_token = st.session_state.get('github_token')
+    if not github_token:
+        input_token = st.text_input("**Enter your security token**", type="password")
+        if input_token:
+            # Validate token quickly
+            headers = {"Authorization": f"token {input_token}"}
+            test = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}", headers=headers)
+            if test.status_code == 200:
+                st.success("Token validated and saved for this session.")
+                st.session_state['github_token'] = input_token
+                github_token = input_token
+            else:
+                st.error("Invalid token or insufficient permissions.")
     
     uploaded_files = st.file_uploader("**Choose files**", type=["xlsx", "csv", "txt", "dat", "jpg", "png"], accept_multiple_files=True)
     

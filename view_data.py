@@ -17,6 +17,7 @@ def validate_token(token):
     return response.status_code == 200
 
 # Function to get repository contents
+@st.cache_data(ttl=300)
 def get_repo_contents(token, path=""):
     repo = "Chakrapani2122/Data"
     url = f"https://api.github.com/repos/{repo}/contents/{path}"
@@ -93,8 +94,18 @@ def display_file_content(token, path):
 def show_view_data_page():
     st.title("📊 View Data")
 
-    # Input for GitHub PAT
-    token = st.text_input("Enter security token", type="password", key="github_token")
+    # Use token from session_state if available, otherwise prompt
+    # Get token from session or prompt. If prompted here and validated, persist to session.
+    token = st.session_state.get('github_token')
+    if not token:
+        input_token = st.text_input("Enter security token", type="password", key="github_token_view")
+        if input_token:
+            if validate_token(input_token):
+                st.success("Token validated successfully and saved for this session.")
+                st.session_state['github_token'] = input_token
+                token = input_token
+            else:
+                st.error("Invalid token.")
 
     if token:
         if validate_token(token):
