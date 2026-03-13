@@ -2,7 +2,7 @@ import streamlit as st
 
 def show_contact_page():
     st.markdown("""
-## 📞 Contact Information:
+## Contact Information:
 
 **📍 Address:**  
 2004 Throckmorton PSC,  

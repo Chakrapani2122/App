@@ -1,95 +1,33 @@
-import streamlit as st
+from io import BytesIO
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
-import base64
-import requests
-import xml.etree.ElementTree as ET
-from io import BytesIO
-from pandas.errors import EmptyDataError
+import streamlit as st
 
-# GitHub repository details
-GITHUB_REPO = "Chakrapani2122/Data"
-GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/"
+from github_utils import (
+    clear_github_caches,
+    get_file_bytes,
+    get_repo_contents,
+    save_visualization_metadata,
+    upload_bytes_to_github,
+    validate_token,
+)
 
-def upload_to_github(file_content, path, token, message, sha=None):
-    url = GITHUB_API_URL + path
-    headers = {
-        "Authorization": f"token {token}",
-        "Content-Type": "application/json"
-    }
-    content = base64.b64encode(file_content).decode("utf-8")
-    
-    data = {
-        "message": message,
-        "content": content
-    }
-    if sha:
-        data["sha"] = sha
+PLOT_TYPES = [
+    "Scatter Plot",
+    "Line Plot",
+    "Bar Plot",
+    "Histogram",
+    "Box Plot",
+    "Violin Plot",
+    "Heatmap",
+    "Regression Plot",
+    "Density Plot",
+    "Swarm Plot",
+    "Pair Plot",
+]
 
-    response = requests.put(url, json=data, headers=headers)
-    return response.status_code, response.json()
-
-def get_file_sha(path, token):
-    url = GITHUB_API_URL + path
-    headers = {
-        "Authorization": f"token {token}"
-    }
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()["sha"]
-    return None
-
-def validate_xml(xml_content):
-    try:
-        ET.fromstring(xml_content)
-        return True
-    except ET.ParseError:
-        return False
-
-@st.cache_data(ttl=300)
-def get_repo_contents(token, path=""):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
-    headers = {"Authorization": f"token {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return None
-
-def display_file_content(token, path):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
-    headers = {"Authorization": f"token {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        content = response.json()
-        if content['type'] == 'file':
-            file_content = requests.get(content['download_url']).content
-            if path.endswith(('.xlsx', '.xls')):
-                excel_file = BytesIO(file_content)
-                try:
-                    xls = pd.ExcelFile(excel_file, engine='openpyxl')
-                    sheet = st.selectbox('Select sheet', xls.sheet_names, key="sheet_select")
-                    df = pd.read_excel(excel_file, sheet_name=sheet)
-                except ValueError:
-                    st.error("The .xlsx file appears to be invalid or corrupted.")
-                except Exception as e:
-                    st.error(f"An error occurred while reading the Excel file: {e}")
-            elif path.endswith('.csv'):
-                try:
-                    df = pd.read_csv(BytesIO(file_content))
-                except EmptyDataError:
-                    st.error("The CSV file is empty or improperly formatted.")
-                except Exception as e:
-                    st.error(f"An error occurred while reading the CSV file: {e}")
-            else:
-                st.error("Unsupported file format.")
-            return df
-        else:
-            st.error("Selected path is not a file.")
-    else:
-        st.error("Failed to retrieve file content.")
-    return None
 
 def show_column_data_types(df):
     with st.expander("**Show Column Data Types**", expanded=False):
@@ -97,269 +35,330 @@ def show_column_data_types(df):
         for col in df.columns:
             column_data.append({
                 "Column Name": col,
-                "Data Type": str(df[col].dtype)
+                "Data Type": str(df[col].dtype),
             })
-        # Organize data types into two columns
         col1, col2 = st.columns(2)
         with col1:
-            st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
+            st.table(pd.DataFrame(column_data[: len(column_data) // 2]).set_index("Column Name"))
         with col2:
-            st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
+            st.table(pd.DataFrame(column_data[len(column_data) // 2 :]).set_index("Column Name"))
+
+
+def _repo_file_nav_grid(token, nav_prefix):
+    dropdown_specs = []
+    current_path = ""
+    selected_file_path = None
+
+    while True:
+        contents = get_repo_contents(token, current_path)
+        if not contents:
+            break
+
+        dirs = sorted(
+            [
+                item
+                for item in contents
+                if item["type"] == "dir" and not (current_path == "" and item["name"].lower() == "visualizations")
+            ],
+            key=lambda x: x["name"].lower(),
+        )
+        files = sorted(
+            [item for item in contents if item["type"] == "file" and item["name"].lower().endswith((".xlsx", ".csv"))],
+            key=lambda x: x["name"].lower(),
+        )
+        dir_names = [d["name"] for d in dirs]
+        file_names = [f["name"] for f in files]
+
+        if not dir_names and not file_names:
+            break
+
+        nav_key = f"{nav_prefix}_{current_path or 'root'}"
+        dropdown_specs.append(
+            {
+                "key": nav_key,
+                "label": f"📂 {current_path.split('/')[-1] if current_path else 'Root'}",
+                "options": ["-- Select --"] + dir_names + file_names,
+                "dir_names": dir_names,
+                "file_names": file_names,
+            }
+        )
+
+        selected_value = st.session_state.get(nav_key, "-- Select --")
+        if selected_value not in dir_names + file_names:
+            break
+        if selected_value in file_names:
+            selected_file_path = f"{current_path}/{selected_value}" if current_path else selected_value
+            break
+        current_path = f"{current_path}/{selected_value}" if current_path else selected_value
+
+    for row_start in range(0, len(dropdown_specs), 3):
+        row_specs = dropdown_specs[row_start : row_start + 3]
+        cols = st.columns(3)
+        for index, spec in enumerate(row_specs):
+            with cols[index]:
+                folder_names = spec["dir_names"]
+
+                def fmt(name, directory_names=folder_names):
+                    if name == "-- Select --":
+                        return name
+                    return f"📁 {name}" if name in directory_names else f"📄 {name}"
+
+                st.selectbox(spec["label"], spec["options"], format_func=fmt, key=spec["key"])
+
+    return selected_file_path
+
+
+def _load_dataset_from_bytes(file_bytes, file_name, key_prefix):
+    lower_name = file_name.lower()
+    if lower_name.endswith(".csv"):
+        return pd.read_csv(BytesIO(file_bytes))
+
+    workbook = pd.ExcelFile(BytesIO(file_bytes))
+    sheet = st.selectbox("Select a sheet", workbook.sheet_names, key=f"sheet_{key_prefix}")
+    return pd.read_excel(BytesIO(file_bytes), sheet_name=sheet)
+
+
+def _render_plot_config(df, key_prefix, comparative_mode=False):
+    available_plot_types = [plot for plot in PLOT_TYPES if not (comparative_mode and plot == "Pair Plot")]
+    numeric_columns = df.select_dtypes(include="number").columns.tolist()
+    columns = df.columns.tolist()
+
+    selector_cols = st.columns(3)
+    with selector_cols[0]:
+        plot_type = st.selectbox("Plot Type", available_plot_types, key=f"plot_type_{key_prefix}")
+    config = {"plot_type": plot_type}
+
+    if plot_type in {"Scatter Plot", "Line Plot", "Bar Plot", "Regression Plot"}:
+        with selector_cols[1]:
+            config["x_column"] = st.selectbox("X-axis", columns, key=f"x_{key_prefix}")
+        with selector_cols[2]:
+            config["y_columns"] = st.multiselect("Y-axis columns", numeric_columns, key=f"y_{key_prefix}")
+    elif plot_type in {"Box Plot", "Violin Plot", "Swarm Plot"}:
+        with selector_cols[1]:
+            config["x_column"] = st.selectbox("X-axis", columns, key=f"x_{key_prefix}")
+        with selector_cols[2]:
+            config["y_column"] = st.selectbox("Y-axis", numeric_columns, key=f"y_single_{key_prefix}")
+    elif plot_type in {"Histogram", "Density Plot"}:
+        with selector_cols[1]:
+            config["x_column"] = st.selectbox("X-axis", numeric_columns, key=f"hist_x_{key_prefix}")
+    elif plot_type == "Heatmap":
+        with selector_cols[1]:
+            config["selected_columns"] = st.multiselect(
+                "Y-axis columns",
+                numeric_columns,
+                default=numeric_columns[: min(5, len(numeric_columns))],
+                key=f"heat_cols_{key_prefix}",
+            )
+    elif plot_type == "Pair Plot":
+        with selector_cols[1]:
+            config["selected_columns"] = st.multiselect(
+                "Y-axis columns",
+                numeric_columns,
+                default=numeric_columns[: min(4, len(numeric_columns))],
+                key=f"pair_cols_{key_prefix}",
+            )
+
+    label_cols = st.columns(3)
+    with label_cols[0]:
+        config["plot_title"] = st.text_input("Plot Title", key=f"plot_title_{key_prefix}")
+    with label_cols[1]:
+        config["x_label"] = st.text_input("X-axis Label", key=f"x_label_{key_prefix}")
+    with label_cols[2]:
+        config["y_label"] = st.text_input("Y-axis Label", key=f"y_label_{key_prefix}")
+    return config
+
+
+def _plot_on_axis(ax, df, config, title):
+    plot_type = config["plot_type"]
+    if plot_type == "Scatter Plot":
+        for column in config["y_columns"]:
+            sns.scatterplot(data=df, x=config["x_column"], y=column, ax=ax, label=column)
+    elif plot_type == "Line Plot":
+        for column in config["y_columns"]:
+            sns.lineplot(data=df, x=config["x_column"], y=column, ax=ax, label=column)
+    elif plot_type == "Bar Plot":
+        for column in config["y_columns"]:
+            sns.barplot(data=df, x=config["x_column"], y=column, ax=ax, label=column)
+    elif plot_type == "Histogram":
+        sns.histplot(data=df, x=config["x_column"], bins=30, ax=ax)
+    elif plot_type == "Box Plot":
+        sns.boxplot(data=df, x=config["x_column"], y=config["y_column"], ax=ax)
+    elif plot_type == "Violin Plot":
+        sns.violinplot(data=df, x=config["x_column"], y=config["y_column"], ax=ax)
+    elif plot_type == "Heatmap":
+        columns = config["selected_columns"] or df.select_dtypes(include="number").columns.tolist()
+        sns.heatmap(df[columns].corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax)
+    elif plot_type == "Regression Plot":
+        for column in config["y_columns"]:
+            sns.regplot(data=df, x=config["x_column"], y=column, ax=ax, label=column)
+    elif plot_type == "Density Plot":
+        sns.kdeplot(data=df, x=config["x_column"], fill=True, ax=ax)
+    elif plot_type == "Swarm Plot":
+        sns.swarmplot(data=df, x=config["x_column"], y=config["y_column"], ax=ax)
+    else:
+        raise ValueError("Unsupported comparative plot type.")
+
+    ax.set_title(config.get("plot_title") or title)
+    if config.get("x_label"):
+        ax.set_xlabel(config["x_label"])
+    if config.get("y_label"):
+        ax.set_ylabel(config["y_label"])
+    _, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend()
+
+
+def _generate_plot_figure(df, primary_config, comparative_mode=False, secondary_config=None, share_x=False, share_y=False):
+    if primary_config["plot_type"] == "Pair Plot" and not comparative_mode:
+        selected_columns = primary_config["selected_columns"]
+        if not selected_columns:
+            raise ValueError("Select at least one column for the pair plot.")
+        grid = sns.pairplot(df[selected_columns].dropna())
+        figure = grid.figure
+        if primary_config.get("plot_title"):
+            figure.suptitle(primary_config["plot_title"], y=1.02)
+        if primary_config.get("x_label") and hasattr(figure, "supxlabel"):
+            figure.supxlabel(primary_config["x_label"])
+        if primary_config.get("y_label") and hasattr(figure, "supylabel"):
+            figure.supylabel(primary_config["y_label"])
+        return figure
+
+    if comparative_mode:
+        figure, axes = plt.subplots(1, 2, figsize=(16, 6), sharex=share_x, sharey=share_y)
+        _plot_on_axis(axes[0], df, primary_config, "Primary Plot")
+        _plot_on_axis(axes[1], df, secondary_config, "Comparison Plot")
+        figure.tight_layout()
+        return figure
+
+    figure, axis = plt.subplots(figsize=(10, 6))
+    _plot_on_axis(axis, df, primary_config, primary_config["plot_type"])
+    figure.tight_layout()
+    return figure
+
 
 def show_custom_visualizations_page(github_token: str | None = None, show_header: bool = True):
-    # Optionally render header/subtitle when used as a standalone page
     if show_header:
         st.title("🎨 Custom Visualizations")
-        st.markdown("**Visualize your data and save the visualization to allow others to view it.**")
+        st.markdown("**Visualize your data, compare plots, and save them.**")
 
-    # If token wasn't provided, try to read from session state
     if not github_token:
-        github_token = st.session_state.get('github_token')
-    # If still no token and header is shown, prompt for it here and validate/persist
+        github_token = st.session_state.get("github_token")
     if not github_token and show_header:
         input_token = st.text_input("**Enter security token**", type="password", key="custom_viz_token_input")
         if input_token:
-            headers = {"Authorization": f"token {input_token}"}
-            test = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}", headers=headers)
-            if test.status_code == 200:
+            if validate_token(input_token):
                 st.success("Token validated and saved for this session.")
-                st.session_state['github_token'] = input_token
+                st.session_state["github_token"] = input_token
                 github_token = input_token
             else:
                 st.error("Invalid token or insufficient permissions.")
+
     df = None
+    dataset_name = None
+    source_identifier = None
     if github_token:
         st.write("**Select a file from the repository or upload a new file**")
         option = st.radio("Choose an option", ["Select from repository", "Upload new file"], key="file_option")
 
         if option == "Select from repository":
-            # ── Phase 1: Trace path from session state
-            cv_dropdown_specs = []
-            cv_path = ""
-            cv_file_path = None
-
-            while True:
-                contents = get_repo_contents(github_token, cv_path)
-                if not contents:
-                    break
-
-                dirs = sorted(
-                    [item for item in contents
-                     if item['type'] == 'dir'
-                     and not (cv_path == "" and item['name'].lower() == 'visualizations')],
-                    key=lambda x: x['name'].lower()
-                )
-                files = sorted(
-                    [item for item in contents
-                     if item['type'] == 'file' and item['name'].lower().endswith(('.xlsx', '.csv'))],
-                    key=lambda x: x['name'].lower()
-                )
-                dir_names = [d['name'] for d in dirs]
-                file_names = [f['name'] for f in files]
-
-                if not dir_names and not file_names:
-                    break
-
-                options = ["-- Select --"] + dir_names + file_names
-                nav_key = f"cv_nav_{cv_path or 'root'}"
-                folder_label = cv_path.split('/')[-1] if cv_path else "Root"
-
-                cv_dropdown_specs.append({
-                    'key': nav_key,
-                    'label': f"📂 {folder_label}",
-                    'options': options,
-                    'dir_names': dir_names,
-                    'file_names': file_names,
-                })
-
-                current_val = st.session_state.get(nav_key, "-- Select --")
-                if current_val not in (dir_names + file_names):
-                    break
-
-                if current_val in file_names:
-                    cv_file_path = f"{cv_path}/{current_val}" if cv_path else current_val
-                    break
-
-                cv_path = f"{cv_path}/{current_val}" if cv_path else current_val
-
-            # ── Phase 2: Render all dropdowns in a 3-column grid
-            for row_start in range(0, len(cv_dropdown_specs), 3):
-                row_specs = cv_dropdown_specs[row_start:row_start + 3]
-                cols = st.columns(3)
-                for i, spec in enumerate(row_specs):
-                    with cols[i]:
-                        dn = spec['dir_names']
-
-                        def fmt(name, _dn=dn):
-                            if name == "-- Select --":
-                                return "-- Select --"
-                            return f"📁 {name}" if name in _dn else f"📄 {name}"
-
-                        st.selectbox(spec['label'], spec['options'], format_func=fmt, key=spec['key'])
-
-            # ── Phase 3: Load the selected file
-            if cv_file_path:
-                st.write("**File Contents**")
-                df = display_file_content(github_token, cv_file_path)
-                with st.expander("**Data Preview**", expanded=False):
-                    if df is not None:
-                        st.dataframe(df)
+            selected_file_path = _repo_file_nav_grid(github_token, "cv_nav")
+            if selected_file_path:
+                file_bytes = get_file_bytes(github_token, selected_file_path)
+                if file_bytes is None:
+                    st.error("Unable to load the selected file.")
+                else:
+                    dataset_name = selected_file_path.split("/")[-1]
+                    source_identifier = selected_file_path
+                    df = _load_dataset_from_bytes(file_bytes, dataset_name, selected_file_path.replace("/", "_"))
             else:
                 st.info("Please select a file to start building visualizations.")
         else:
             uploaded_file = st.file_uploader("**Choose a CSV or Excel file**", type=["csv", "xlsx"])
             if uploaded_file is not None:
-                if uploaded_file.name.endswith(".csv"):
-                    df = pd.read_csv(uploaded_file)
-                elif uploaded_file.name.endswith(".xlsx"):
-                    xls = pd.ExcelFile(uploaded_file)
-                    sheet_name = st.selectbox("**Select a sheet**", xls.sheet_names)
-                    df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
-                st.write("**Data Preview: First 100 Observations**")
-                st.dataframe(df.head(100))
-                st.write("---")
+                dataset_name = uploaded_file.name
+                source_identifier = uploaded_file.name
+                df = _load_dataset_from_bytes(uploaded_file.getvalue(), uploaded_file.name, uploaded_file.name.replace(".", "_"))
 
-        if df is not None:
-            # Display data types of each column
-            show_column_data_types(df)
-            st.write("---")
-
-            columns = df.columns.tolist()
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.write("**X-axis columns**")
-                x_axis = st.multiselect("Select X-axis columns", columns, key="x_axis")
-            
-            with col2:
-                st.write("**Y-axis columns**")
-                y_axis = st.multiselect("Select Y-axis columns", columns, key="y_axis")
-            
-            with col3:
-                st.write("**Plot type**")
-                plot_type = st.selectbox("Select Plot Type", [
-                    "Scatter Plot", "Line Plot", "Bar Plot", "Histogram", "Box Plot", "Violin Plot",
-                    "Heatmap", "Pair Plot", "Regression Plot", "Density Plot", "Swarm Plot"
-                ], key="plot_type")
-
-            if st.button("Generate Plot"):
-                plt.figure(figsize=(10, 6))
-                try:
-                    if plot_type == "Scatter Plot":
-                        for y in y_axis:
-                            sns.scatterplot(data=df, x=x_axis[0], y=y, label=y)
-                        plt.legend()
-                    elif plot_type == "Line Plot":
-                        for y in y_axis:
-                            sns.lineplot(data=df, x=x_axis[0], y=y, label=y)
-                        plt.legend()
-                    elif plot_type == "Bar Plot":
-                        for y in y_axis:
-                            sns.barplot(data=df, x=x_axis[0], y=y, label=y)
-                        plt.legend()
-                    elif plot_type == "Histogram":
-                        for y in y_axis:
-                            sns.histplot(data=df, x=x_axis[0], y=y, bins=30, label=y)
-                        plt.legend()
-                    elif plot_type == "Box Plot":
-                        sns.boxplot(data=df, x=x_axis[0], y=y_axis)
-                        plt.legend()
-                    elif plot_type == "Violin Plot":
-                        sns.violinplot(data=df, x=x_axis[0], y=y_axis)
-                        plt.legend()
-                    elif plot_type == "Heatmap":
-                        sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
-                        plt.legend()
-                    elif plot_type == "Pair Plot":
-                        sns.pairplot(df)
-                        plt.legend()
-                    elif plot_type == "Regression Plot":
-                        for y in y_axis:
-                            sns.regplot(data=df, x=x_axis[0], y=y)
-                        plt.legend()
-                    elif plot_type == "Density Plot":
-                        sns.kdeplot(data=df, x=x_axis[0], hue=y_axis[0], fill=True)
-                        plt.legend()
-                    elif plot_type == "Swarm Plot":
-                        sns.swarmplot(data=df, x=x_axis[0], y=y_axis)
-                        plt.legend()
-
-                    plt.xlabel(", ".join(x_axis))
-                    plt.ylabel(", ".join(y_axis))
-                    plt.legend()
-                    plt.title(f"{plot_type} of {', '.join(y_axis)} vs {', '.join(x_axis)}")
-                    st.pyplot(plt)
-
-                    # Save the plot to session state
-                    img_buffer = BytesIO()
-                    plt.savefig(img_buffer, format='png')
-                    img_buffer.seek(0)
-                    st.session_state['plot_image'] = img_buffer
-
-                except Exception as e:
-                    st.error(f"Error generating plot: {e}")
-
-            if 'plot_image' in st.session_state:
-                st.image(st.session_state['plot_image'].getvalue(), caption="Generated Plot")
-
-                plot_name = st.text_input("**Enter the name for the visualization**")
-                plot_description = st.text_area("**Enter the description for the visualization**")
-                
-                if plot_name and plot_description:
-                    # Save description in XML
-                    visualization = ET.Element("Visualization")
-                    ET.SubElement(visualization, "Name").text = plot_name
-                    ET.SubElement(visualization, "Description").text = plot_description
-                    
-                    if st.button("Save"):
-                        # Upload image
-                        img_status, img_response = upload_to_github(st.session_state['plot_image'].getvalue(), f"visualizations/{plot_name}.png", github_token, f"Upload visualization image: {plot_name}")
-                        
-                        # Check if descriptions.xml exists
-                        xml_sha = get_file_sha("visualizations/descriptions.xml", github_token)
-                        if xml_sha:
-                            # Download existing XML
-                            xml_url = GITHUB_API_URL + "visualizations/descriptions.xml"
-                            xml_headers = {"Authorization": f"token {github_token}"}
-                            xml_response = requests.get(xml_url, headers=xml_headers)
-                            if xml_response.status_code == 200:
-                                try:
-                                    xml_content_base64 = xml_response.json()['content']
-                                    xml_content = base64.b64decode(xml_content_base64).decode('utf-8')
-                                    existing_tree = ET.ElementTree(ET.fromstring(xml_content))
-                                    existing_root = existing_tree.getroot()
-                                    existing_root.append(visualization)
-                                    xml_buffer = BytesIO()
-                                    existing_tree.write(xml_buffer, encoding='utf-8', xml_declaration=True)
-                                    xml_buffer.seek(0)
-                                except (ET.ParseError, KeyError, base64.binascii.Error) as e:
-                                    st.error(f"Error parsing XML: {e}")
-                                    st.text(xml_content)  # Display the problematic XML content for debugging
-                                    return
-                        else:
-                            # Create new XML
-                            root = ET.Element("Visualizations")
-                            root.append(visualization)
-                            tree = ET.ElementTree(root)
-                            xml_buffer = BytesIO()
-                            tree.write(xml_buffer, encoding='utf-8', xml_declaration=True)
-                            xml_buffer.seek(0)
-                        
-                        # Validate XML
-                        xml_content = xml_buffer.getvalue().decode('utf-8')
-                        if validate_xml(xml_content):
-                            # Upload XML
-                            xml_status, xml_response = upload_to_github(xml_buffer.read(), "visualizations/descriptions.xml", github_token, f"Upload visualization description: {plot_name}", sha=xml_sha)
-                            
-                            if img_status == 201 and xml_status in [200, 201]:
-                                st.success("Visualization uploaded successfully!")
-                            else:
-                                st.error("Failed to upload visualization.")
-                        else:
-                            st.error("Invalid XML format.")
-        else:
+        if df is None:
             st.info("Please select a file to start building visualizations.")
+            return
+
+        with st.expander("**Data Snapshot**", expanded=False):
+            st.dataframe(df, use_container_width=True)
+        show_column_data_types(df)
+        st.write("---")
+
+        st.write("**Visualization Builder**")
+        comparative_mode = st.checkbox("Enable comparative visualization mode", key="comparative_mode")
+        if comparative_mode:
+            compare_cols = st.columns(2)
+            with compare_cols[0]:
+                st.markdown("**Primary plot**")
+                primary_config = _render_plot_config(df, "primary", comparative_mode=True)
+            with compare_cols[1]:
+                st.markdown("**Comparison plot**")
+                secondary_config = _render_plot_config(df, "secondary", comparative_mode=True)
+            link_cols = st.columns(2)
+            with link_cols[0]:
+                share_x = st.checkbox("Link X-axes", key="share_x")
+            with link_cols[1]:
+                share_y = st.checkbox("Link Y-axes", key="share_y")
+        else:
+            primary_config = _render_plot_config(df, "primary", comparative_mode=False)
+            secondary_config = None
+            share_x = False
+            share_y = False
+
+        if st.button("Generate Plot"):
+            try:
+                figure = _generate_plot_figure(
+                    df,
+                    primary_config,
+                    comparative_mode=comparative_mode,
+                    secondary_config=secondary_config,
+                    share_x=share_x,
+                    share_y=share_y,
+                )
+                img_buffer = BytesIO()
+                figure.savefig(img_buffer, format="png", bbox_inches="tight")
+                img_buffer.seek(0)
+                st.session_state["plot_image"] = img_buffer.getvalue()
+                plt.close(figure)
+            except Exception as exc:
+                st.error(f"Error generating plot: {exc}")
+
+        if "plot_image" in st.session_state:
+            st.image(st.session_state["plot_image"], caption="Generated Plot", use_container_width=True)
+            st.download_button(
+                "Download Generated Plot (PNG)",
+                data=st.session_state["plot_image"],
+                file_name="generated_visualization.png",
+                mime="image/png",
+                key="download_generated_plot_png",
+            )
+            plot_name = st.text_input("**Enter the name for the visualization**")
+            plot_description = st.text_area("**Enter the description for the visualization**")
+            created_by = st.text_input("**Created by**", key="plot_created_by")
+
+            if st.button("Upload Visualization"):
+                if not plot_name.strip():
+                    st.error("Please enter a visualization name before uploading.")
+                elif not plot_description.strip():
+                    st.error("Please enter a visualization description before uploading.")
+                else:
+                    img_status, _ = upload_bytes_to_github(
+                        st.session_state["plot_image"],
+                        f"visualizations/{plot_name}.png",
+                        github_token,
+                        f"Upload visualization image: {plot_name}",
+                    )
+                    xml_status, _ = save_visualization_metadata(github_token, plot_name, plot_description)
+                    if img_status == 201 and xml_status in [200, 201]:
+                        clear_github_caches()
+                        st.success("Visualization uploaded successfully.")
+                    else:
+                        st.error("Failed to upload visualization.")
+
 
 if __name__ == "__main__":
     show_custom_visualizations_page()
