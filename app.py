@@ -39,7 +39,11 @@ if page == "Home":
     with col2:
         st.title("Welcome!")
     st.write("## 🌱 Soil Microbial Agroecology Lab (SMAL - KSU)  ")
-    st.image("assets/home.png", width="stretch")
+    try:
+        st.image("assets/home.png", width="stretch")
+    except TypeError:
+        # Compatibility fallback for older Streamlit versions
+        st.image("assets/home.png", use_column_width=True)
     st.write("")
     st.write("""
 ### Kansas State University
