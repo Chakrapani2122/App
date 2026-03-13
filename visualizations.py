@@ -38,7 +38,7 @@ def _render_gallery_view(items, token):
                 if not image_bytes:
                     st.warning(f"Unable to load {item['name']}")
                     continue
-                st.image(Image.open(BytesIO(image_bytes)), caption=item["name"], use_container_width=True)
+                st.image(Image.open(BytesIO(image_bytes)), caption=item["name"], use_column_width=True)
                 st.write(f"**Description:** {item['description']}")
                 st.caption(f"Size: {item.get('size', 0)} bytes")
                 st.download_button(
@@ -61,7 +61,7 @@ def _render_grid_view(items, token):
                 if not image_bytes:
                     st.warning(f"Unable to load {item['name']}")
                     continue
-                st.image(Image.open(BytesIO(image_bytes)), caption=item["name"], use_container_width=True)
+                st.image(Image.open(BytesIO(image_bytes)), caption=item["name"], use_column_width=True)
                 st.caption(item["description"])
                 st.download_button(
                     label="Download",
@@ -78,7 +78,7 @@ def _render_list_view(items, token):
         list_cols = st.columns([1, 3, 1])
         with list_cols[0]:
             if image_bytes:
-                st.image(Image.open(BytesIO(image_bytes)), use_container_width=True)
+                st.image(Image.open(BytesIO(image_bytes)), use_column_width=True)
             else:
                 st.warning("Preview unavailable")
         with list_cols[1]:

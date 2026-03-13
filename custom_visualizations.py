@@ -328,7 +328,7 @@ def show_custom_visualizations_page(github_token: str | None = None, show_header
                 st.error(f"Error generating plot: {exc}")
 
         if "plot_image" in st.session_state:
-            st.image(st.session_state["plot_image"], caption="Generated Plot", use_container_width=True)
+            st.image(st.session_state["plot_image"], caption="Generated Plot", use_column_width=True)
             st.download_button(
                 "Download Generated Plot (PNG)",
                 data=st.session_state["plot_image"],
