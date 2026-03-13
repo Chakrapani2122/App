@@ -39,7 +39,7 @@ if page == "Home":
     with col2:
         st.title("Welcome!")
     st.write("## 🌱 Soil Microbial Agroecology Lab (SMAL - KSU)  ")
-    st.image("assets/home.png", use_column_width=True)
+    st.image("assets/home.png", width="stretch")
     st.write("")
     st.write("""
 ### Kansas State University

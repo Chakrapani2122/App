@@ -133,35 +133,79 @@ def show_custom_visualizations_page(github_token: str | None = None, show_header
         option = st.radio("Choose an option", ["Select from repository", "Upload new file"], key="file_option")
 
         if option == "Select from repository":
-            research_areas = get_repo_contents(github_token)
-            research_area_names = [area['name'] for area in research_areas if area['type'] == 'dir' and area['name'] != 'visualizations']
+            # ── Phase 1: Trace path from session state
+            cv_dropdown_specs = []
+            cv_path = ""
+            cv_file_path = None
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                selected_research_area = st.selectbox("Select Research Area", research_area_names, key="research_area_select")
+            while True:
+                contents = get_repo_contents(github_token, cv_path)
+                if not contents:
+                    break
 
-            if selected_research_area:
-                selected_area_contents = get_repo_contents(github_token, selected_research_area)
-                folder_names = [folder['name'] for folder in selected_area_contents if folder['type'] == 'dir']
+                dirs = sorted(
+                    [item for item in contents
+                     if item['type'] == 'dir'
+                     and not (cv_path == "" and item['name'].lower() == 'visualizations')],
+                    key=lambda x: x['name'].lower()
+                )
+                files = sorted(
+                    [item for item in contents
+                     if item['type'] == 'file' and item['name'].lower().endswith(('.xlsx', '.csv'))],
+                    key=lambda x: x['name'].lower()
+                )
+                dir_names = [d['name'] for d in dirs]
+                file_names = [f['name'] for f in files]
 
-                with col2:
-                    selected_data_folder = st.selectbox("Select Research Data Folder", folder_names, key="data_folder_select")
+                if not dir_names and not file_names:
+                    break
 
-                if selected_data_folder:
-                    selected_folder_contents = get_repo_contents(github_token, f"{selected_research_area}/{selected_data_folder}")
-                    file_names = [file['name'] for file in selected_folder_contents if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv'))]
+                options = ["-- Select --"] + dir_names + file_names
+                nav_key = f"cv_nav_{cv_path or 'root'}"
+                folder_label = cv_path.split('/')[-1] if cv_path else "Root"
 
-                    with col3:
-                        selected_file = st.selectbox("Select a file", file_names, key="file_select")
+                cv_dropdown_specs.append({
+                    'key': nav_key,
+                    'label': f"📂 {folder_label}",
+                    'options': options,
+                    'dir_names': dir_names,
+                    'file_names': file_names,
+                })
 
-                    if selected_file:
-                        file_path = f"{selected_research_area}/{selected_data_folder}/{selected_file}"
-                        st.write("**File Contents**")
-                        df = display_file_content(github_token, file_path)
-                        with st.expander("**Data Preview**", expanded=False):
-                            st.dataframe(df)
-                    else:
-                        st.info("Please select a file to start building visualizations.")
+                current_val = st.session_state.get(nav_key, "-- Select --")
+                if current_val not in (dir_names + file_names):
+                    break
+
+                if current_val in file_names:
+                    cv_file_path = f"{cv_path}/{current_val}" if cv_path else current_val
+                    break
+
+                cv_path = f"{cv_path}/{current_val}" if cv_path else current_val
+
+            # ── Phase 2: Render all dropdowns in a 3-column grid
+            for row_start in range(0, len(cv_dropdown_specs), 3):
+                row_specs = cv_dropdown_specs[row_start:row_start + 3]
+                cols = st.columns(3)
+                for i, spec in enumerate(row_specs):
+                    with cols[i]:
+                        dn = spec['dir_names']
+
+                        def fmt(name, _dn=dn):
+                            if name == "-- Select --":
+                                return "-- Select --"
+                            return f"📁 {name}" if name in _dn else f"📄 {name}"
+
+                        st.selectbox(spec['label'], spec['options'], format_func=fmt, key=spec['key'])
+
+            # ── Phase 3: Load the selected file
+            if cv_file_path:
+                st.write("**File Contents**")
+                df = display_file_content(github_token, cv_file_path)
+                with st.expander("**Data Preview**", expanded=False):
+                    if df is not None:
+                        st.dataframe(df)
+            else:
+                st.info("Please select a file to start building visualizations.")
         else:
             uploaded_file = st.file_uploader("**Choose a CSV or Excel file**", type=["csv", "xlsx"])
             if uploaded_file is not None:

@@ -3,30 +3,35 @@ import requests
 from io import BytesIO
 import pandas as pd
 from PIL import Image
-from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
-import xml.etree.ElementTree as ET
 from pandas.errors import EmptyDataError
+
+GITHUB_REPO = "Chakrapani2122/Data"
+SUPPORTED_EXTENSIONS = ('.xlsx', '.xls', '.csv', '.txt', '.md', '.png', '.jpg', '.jpeg', '.dat')
+
 
 # Function to validate GitHub PAT
 def validate_token(token):
-    repo = "Chakrapani2122/Data"
-    url = f"https://api.github.com/repos/{repo}"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}"
     headers = {"Authorization": f"token {token}"}
     response = requests.get(url, headers=headers)
     return response.status_code == 200
 
-# Function to get repository contents
+
+# Function to get repository contents at a given path
 @st.cache_data(ttl=300)
 def get_repo_contents(token, path=""):
-    repo = "Chakrapani2122/Data"
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {token}"}
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        return response.json()
-    else:
+        result = response.json()
+        # GitHub returns a list for directories, dict for single files
+        if isinstance(result, list):
+            return result
         return None
+    return None
+
 
 # Function to display column data types
 def show_column_data_types(df):
@@ -37,24 +42,23 @@ def show_column_data_types(df):
                 "Column Name": col,
                 "Data Type": str(df[col].dtype)
             })
-        # Organize data types into two columns
         col1, col2 = st.columns(2)
         with col1:
-            st.table(pd.DataFrame(column_data[:len(column_data)//2]).set_index("Column Name"))
+            st.table(pd.DataFrame(column_data[:len(column_data) // 2]).set_index("Column Name"))
         with col2:
-            st.table(pd.DataFrame(column_data[len(column_data)//2:]).set_index("Column Name"))
+            st.table(pd.DataFrame(column_data[len(column_data) // 2:]).set_index("Column Name"))
+
 
 # Function to display file content
 def display_file_content(token, path):
-    repo = "Chakrapani2122/Data"
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {token}"}
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         content = response.json()
-        if content['type'] == 'file':
+        if isinstance(content, dict) and content.get('type') == 'file':
             file_content = requests.get(content['download_url']).content
-            if path.endswith(('.xlsx', '.xls')):
+            if path.lower().endswith(('.xlsx', '.xls')):
                 excel_file = BytesIO(file_content)
                 try:
                     xls = pd.ExcelFile(excel_file, engine='openpyxl')
@@ -67,7 +71,7 @@ def display_file_content(token, path):
                     st.error("The .xlsx file appears to be invalid or corrupted.")
                 except Exception as e:
                     st.error(f"An error occurred while reading the Excel file: {e}")
-            elif path.endswith('.csv'):
+            elif path.lower().endswith('.csv'):
                 try:
                     df = pd.read_csv(BytesIO(file_content))
                     st.dataframe(df)
@@ -77,25 +81,56 @@ def display_file_content(token, path):
                     st.error("The CSV file is empty or improperly formatted.")
                 except Exception as e:
                     st.error(f"An error occurred while reading the CSV file: {e}")
-            elif path.endswith(('.txt', '.md')):
-                st.text(file_content.decode())
-            elif path.endswith(('.jpg', '.jpeg', '.png')):
+            elif path.lower().endswith(('.txt', '.md', '.dat')):
+                try:
+                    st.text(file_content.decode('utf-8'))
+                except UnicodeDecodeError:
+                    st.text(file_content.decode('latin-1'))
+            elif path.lower().endswith(('.jpg', '.jpeg', '.png')):
                 image = Image.open(BytesIO(file_content))
-                st.image(image, caption=path)
+                st.image(image, caption=path.split('/')[-1])
             else:
-                st.text(file_content.decode())
+                try:
+                    st.text(file_content.decode('utf-8'))
+                except UnicodeDecodeError:
+                    st.warning("This file cannot be displayed as text.")
         else:
             st.error("Selected path is not a file.")
     else:
-        st.error("Failed to retrieve file content.")
+        st.error(f"Failed to retrieve file content (HTTP {response.status_code}).")
     return None
+
+
+def _show_data_insights(df):
+    """Show an expander with shape, missing values, and descriptive stats."""
+    with st.expander("**Expand to view data insights**", expanded=False):
+        if df is not None:
+            st.write(f"**Shape:** {df.shape[0]} rows and {df.shape[1]} columns")
+            missing_values = pd.DataFrame({
+                "Column Name": df.columns,
+                "Missing Values": df.isnull().sum().values
+            })
+            missing_values = missing_values[missing_values["Missing Values"] > 0]
+            if not missing_values.empty:
+                st.write("**Missing Values:**")
+                num_columns = 4
+                cols = st.columns(num_columns)
+                for i, row in missing_values.iterrows():
+                    with cols[i % num_columns]:
+                        st.write(f"{row['Column Name']}: {row['Missing Values']}")
+            else:
+                st.write("**Missing Values:** There are no missing values in this sheet.")
+            st.write("**Descriptive Analysis:**")
+            st.dataframe(df.describe())
+        else:
+            st.warning("No data available to display insights.")
+
 
 # Function to show the view data page
 def show_view_data_page():
     st.title("📊 View Data")
 
-    # Use token from session_state if available, otherwise prompt
-    # Get token from session or prompt. If prompted here and validated, persist to session.
+    # Token handling: use session token if already set, otherwise prompt
     token = st.session_state.get('github_token')
     if not token:
         input_token = st.text_input("Enter security token", type="password", key="github_token_view")
@@ -107,61 +142,89 @@ def show_view_data_page():
             else:
                 st.error("Invalid token.")
 
-    if token:
-        if validate_token(token):
-            st.success("Token validated successfully!")
+    if not token:
+        return
 
-            research_areas = get_repo_contents(token)
-            research_area_names = [area['name'] for area in research_areas if area['type'] == 'dir']
+    st.write("**Select File**")
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                selected_research_area = st.selectbox("Select Research Area", research_area_names, key="research_area_select")
+    # ── Phase 1: Trace selections stored in session state to build the list of
+    #             dropdowns that need to be rendered, without rendering yet.
+    dropdown_specs = []
+    selected_file_path = None
+    path_so_far = ""
 
-            if selected_research_area:
-                selected_area_contents = get_repo_contents(token, selected_research_area)
-                folder_names = [folder['name'] for folder in selected_area_contents if folder['type'] == 'dir']
+    while True:
+        contents = get_repo_contents(token, path_so_far)
+        if contents is None:
+            st.error("Failed to load folder contents. Please verify your token or try again.")
+            break
 
-                with col2:
-                    selected_data_folder = st.selectbox("Select Research Data Folder", folder_names, key="data_folder_select")
+        dirs = sorted(
+            [item for item in contents
+             if item['type'] == 'dir' and not (path_so_far == "" and item['name'].lower() == 'visualizations')],
+            key=lambda x: x['name'].lower()
+        )
+        files = sorted(
+            [item for item in contents if item['type'] == 'file'
+             and item['name'].lower().endswith(SUPPORTED_EXTENSIONS)],
+            key=lambda x: x['name'].lower()
+        )
 
-                if selected_data_folder:
-                    selected_folder_contents = get_repo_contents(token, f"{selected_research_area}/{selected_data_folder}")
-                    file_names = [file['name'] for file in selected_folder_contents if file['type'] == 'file' and file['name'].lower().endswith(('.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg', '.md'))]
+        dir_names = [d['name'] for d in dirs]
+        file_names = [f['name'] for f in files]
 
-                    with col3:
-                        selected_file = st.selectbox("Select a file", file_names, key="file_select")
+        if not dir_names and not file_names:
+            break
 
-                    if selected_file:
-                        file_path = f"{selected_research_area}/{selected_data_folder}/{selected_file}"
-                        st.write("**File Contents**")
-                        df = display_file_content(token, file_path)
+        options = ["-- Select --"] + dir_names + file_names
+        nav_key = f"nav_{path_so_far or 'root'}"
+        folder_label = path_so_far.split('/')[-1] if path_so_far else "Root"
 
-                        # Add an expander below the data types button to display additional data insights
-                        with st.expander("**Expand to view data insights**", expanded=False):
-                            if df is not None:
-                                st.write(f"**Shape:** {df.shape[0]} rows and {df.shape[1]} columns")
-                                missing_values = pd.DataFrame({
-                                    "Column Name": df.columns,
-                                    "Missing Values": df.isnull().sum().values
-                                })
-                                missing_values = missing_values[missing_values["Missing Values"] > 0]  # Filter columns with missing values > 0
-                                if not missing_values.empty:
-                                    st.write("**Missing Values:**")
-                                    num_columns = 4
-                                    columns = st.columns(num_columns)
-                                    for i, row in missing_values.iterrows():
-                                        col_index = i % num_columns
-                                        with columns[col_index]:
-                                            st.write(f"{row['Column Name']}: {row['Missing Values']}")
-                                else:
-                                    st.write("**Missing Values:** There are no missing values in this sheet.")
-                                st.write("**Descriptive Analysis:**")
-                                st.dataframe(df.describe())
-                            else:
-                                st.warning("No data available to display insights.")
-        else:
-            st.error("Invalid token.")
+        dropdown_specs.append({
+            'key': nav_key,
+            'label': f"📂 {folder_label}",
+            'options': options,
+            'dir_names': dir_names,
+            'file_names': file_names,
+        })
 
+        # Read already-stored selection (won't block render — just reading state)
+        current_val = st.session_state.get(nav_key, "-- Select --")
+        if current_val not in (dir_names + file_names):
+            break  # Nothing chosen yet at this level
 
+        if current_val in file_names:
+            selected_file_path = f"{path_so_far}/{current_val}" if path_so_far else current_val
+            break  # File chosen — stop building dropdowns
 
+        # Folder chosen — go one level deeper
+        path_so_far = f"{path_so_far}/{current_val}" if path_so_far else current_val
+
+    # ── Phase 2: Render all collected dropdowns in a 3-column grid,
+    #             adding a new row every 3 levels of depth.
+    for row_start in range(0, len(dropdown_specs), 3):
+        row_specs = dropdown_specs[row_start:row_start + 3]
+        cols = st.columns(3)
+        for i, spec in enumerate(row_specs):
+            with cols[i]:
+                dn = spec['dir_names']
+
+                def fmt(name, _dn=dn):
+                    if name == "-- Select --":
+                        return "-- Select --"
+                    return f"📁 {name}" if name in _dn else f"📄 {name}"
+
+                st.selectbox(
+                    spec['label'],
+                    spec['options'],
+                    format_func=fmt,
+                    key=spec['key']
+                )
+
+    # ── Phase 3: Display the selected file (if any).
+    if selected_file_path:
+        st.write("---")
+        st.markdown(f"**📄 File:** `{selected_file_path.split('/')[-1]}`")
+        st.write("**File Contents**")
+        df = display_file_content(token, selected_file_path)
+        _show_data_insights(df)

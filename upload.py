@@ -85,8 +85,59 @@ def display_file_content(token, path):
         st.error(f"Failed to fetch file content: {response.status_code} - {response.text}")
         return pd.DataFrame()  # Return empty DataFrame on error
 
+def _folder_nav_grid(token, nav_prefix, exclude_root=None):
+    """
+    Cascading 3-column folder-only navigation.
+    Returns the deepest selected folder path, or "" if none chosen yet.
+    """
+    dropdown_specs = []
+    path_so_far = ""
+
+    while True:
+        contents = get_repo_contents(token, path_so_far)
+        if not contents:
+            break
+
+        dirs = sorted(
+            [item for item in contents
+             if item['type'] == 'dir'
+             and not (path_so_far == "" and exclude_root
+                      and item['name'].lower() in [e.lower() for e in exclude_root])],
+            key=lambda x: x['name'].lower()
+        )
+        dir_names = [d['name'] for d in dirs]
+        if not dir_names:
+            break
+
+        options = ["-- Select --"] + dir_names
+        nav_key = f"{nav_prefix}_{path_so_far or 'root'}"
+        folder_label = path_so_far.split('/')[-1] if path_so_far else "Root"
+
+        dropdown_specs.append({
+            'key': nav_key,
+            'label': f"📂 {folder_label}",
+            'options': options,
+        })
+
+        current_val = st.session_state.get(nav_key, "-- Select --")
+        if current_val not in dir_names:
+            break
+
+        path_so_far = f"{path_so_far}/{current_val}" if path_so_far else current_val
+
+    # Render all dropdowns in a 3-column grid
+    for row_start in range(0, len(dropdown_specs), 3):
+        row_specs = dropdown_specs[row_start:row_start + 3]
+        cols = st.columns(3)
+        for i, spec in enumerate(row_specs):
+            with cols[i]:
+                st.selectbox(spec['label'], spec['options'], key=spec['key'])
+
+    return path_so_far
+
+
 def show_upload_page():
-    st.title("📎 Upload Files")
+    st.title("Upload Files")
     
     # Use centralized token if available
     github_token = st.session_state.get('github_token')
@@ -152,45 +203,32 @@ def show_upload_page():
             if file_name.endswith((".xlsx", ".csv")):
                 show_column_data_types(df)
 
-            # Research Area and Data Folder Selection
-            research_areas = get_repo_contents(github_token)
-            research_area_names = [area['name'] for area in research_areas if area['type'] == 'dir']
+            # Folder navigation for upload destination
+            st.write("**📂 Select destination folder**")
+            dest_folder = _folder_nav_grid(github_token, "up_nav", exclude_root=["visualizations"])
 
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_research_area = st.selectbox("Select Research Area", research_area_names, key="research_area_select")
+            if dest_folder:
+                upload_status = st.empty()
+                file_statuses = []
 
-            if selected_research_area:
-                selected_area_contents = get_repo_contents(github_token, selected_research_area)
-                folder_names = [folder['name'] for folder in selected_area_contents if folder['type'] == 'dir']
+                if st.button("Upload"):
+                    if github_token:
+                        for uploaded_file in uploaded_files:
+                            file_name = uploaded_file.name
+                            path = f"{dest_folder}/{file_name}"
+                            uploaded_file.seek(0)
+                            status_code, response = upload_to_github(uploaded_file, path, github_token)
+                            if status_code == 201:
+                                file_statuses.append(f"File '{file_name}' uploaded successfully!")
+                            elif status_code == 409:
+                                file_statuses.append(f"File '{file_name}' already exists at path: {path}")
+                            else:
+                                file_statuses.append(f"Failed to upload file '{file_name}'. Error: {response}")
 
-                with col2:
-                    selected_data_folder = st.selectbox("Select Research Data Folder", folder_names, key="data_folder_select")
-
-                if selected_data_folder:
-                    upload_status = st.empty()  # Placeholder for upload status message
-                    file_statuses = []  # List to hold the status of each file
-
-                    if st.button("Upload"):
-                        if github_token:
-                            for uploaded_file in uploaded_files:
-                                file_name = uploaded_file.name
-                                path = f"{selected_research_area}/{selected_data_folder}/{file_name}"
-                                # Re-read the file content to ensure it is not corrupted
-                                uploaded_file.seek(0)
-                                status_code, response = upload_to_github(uploaded_file, path, github_token)
-                                if status_code == 201:
-                                    file_statuses.append(f"File '{file_name}' uploaded successfully!")
-                                elif status_code == 409:
-                                    file_statuses.append(f"File '{file_name}' already exists at path: {path}")
-                                else:
-                                    file_statuses.append(f"Failed to upload file '{file_name}'. Error: {response}")
-
-                            # Display the status of each file
-                            for status in file_statuses:
-                                upload_status.write(status)
-                        else:
-                            upload_status.error("Security token is required to upload files.")
+                        for status in file_statuses:
+                            upload_status.write(status)
+                    else:
+                        upload_status.error("Security token is required to upload files.")
 
 if __name__ == "__main__":
     show_upload_page()
