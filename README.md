@@ -2,7 +2,7 @@
 
 ## Kansas State University
 
-The **Soil Microbial Agroecology La# 🌱 Soil Microbial Agroecology Lab (SMAL) – Web Application
+The **Soil Microbial Agroecology Lab** 🌱 Soil Microbial Agroecology Lab (SMAL) – Web Application
 
 ## Kansas State University
 
